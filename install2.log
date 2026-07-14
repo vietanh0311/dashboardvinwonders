@@ -1,0 +1,909 @@
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm warn deprecated next@14.2.5: This version has a security vulnerability. Please upgrade to a patched version. See https://nextjs.org/blog/security-update-2025-12-11 for more details.
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-x64-6yuy8weh',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-x64-6yuy8weh'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-x64-6yuy8weh'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-gnu-tKFrTDwH',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-gnu-tKFrTDwH'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-gnu-tKFrTDwH'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-arm64-musl-nVTDy1xH',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-arm64-musl-nVTDy1xH'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-arm64-musl-nVTDy1xH'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-arm64-b8vN1v4h',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-arm64-b8vN1v4h'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-darwin-arm64-b8vN1v4h'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-musl-280sWzGd',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-musl-280sWzGd'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-linux-x64-musl-280sWzGd'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-arm64-msvc-Bxin8S17',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-arm64-msvc-Bxin8S17'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-arm64-msvc-Bxin8S17'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-x64-msvc-HrtSr9k6',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-x64-msvc-HrtSr9k6'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-x64-msvc-HrtSr9k6'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm-eabi-G8VudqRS',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm-eabi-G8VudqRS'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm-eabi-G8VudqRS'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-ia32-msvc-eEjBHu8U',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-ia32-msvc-eEjBHu8U'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/.swc-win32-ia32-msvc-eEjBHu8U'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-freebsd-x64-xyjDek1X',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-freebsd-x64-xyjDek1X'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-freebsd-x64-xyjDek1X'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-musl-K0C4L3Te',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-musl-K0C4L3Te'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-musl-K0C4L3Te'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-x64-yY3nIvfD',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-x64-yY3nIvfD'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-x64-yY3nIvfD'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-musleabihf-SANKBoza',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-musleabihf-SANKBoza'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-musleabihf-SANKBoza'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-gnu-wHkKxQVl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-gnu-wHkKxQVl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-gnu-wHkKxQVl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-ppc64-gnu-shwQbY4c',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-ppc64-gnu-shwQbY4c'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-ppc64-gnu-shwQbY4c'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-gnu-vIvLNG8w',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-gnu-vIvLNG8w'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-gnu-vIvLNG8w'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-arm64-cPe1ALx1',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-arm64-cPe1ALx1'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-darwin-arm64-cPe1ALx1'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-arm64-msvc-CKUccfm1',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-arm64-msvc-CKUccfm1'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-arm64-msvc-CKUccfm1'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-musl-hvkEfdiQ',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-musl-hvkEfdiQ'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-x64-musl-hvkEfdiQ'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-wasm32-wasi-qpdG6iNW',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-wasm32-wasi-qpdG6iNW'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-wasm32-wasi-qpdG6iNW'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-ia32-msvc-ymuhd0Hy',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-ia32-msvc-ymuhd0Hy'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-ia32-msvc-ymuhd0Hy'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm64-TlYfNRr6',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm64-TlYfNRr6'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-android-arm64-TlYfNRr6'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-x64-msvc-CU51oGTE',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-x64-msvc-CU51oGTE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-win32-x64-msvc-CU51oGTE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm64-musl-kx8MrKn3',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm64-musl-kx8MrKn3'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm64-musl-kx8MrKn3'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-gnu-SlIGeSDB',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-gnu-SlIGeSDB'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-loong64-gnu-SlIGeSDB'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-musl-BKN9ks0b',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-musl-BKN9ks0b'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-riscv64-musl-BKN9ks0b'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-gnueabihf-zAqoKFaw',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-gnueabihf-zAqoKFaw'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-arm-gnueabihf-zAqoKFaw'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-s390x-gnu-C7EMMtEQ',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-s390x-gnu-C7EMMtEQ'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-linux-s390x-gnu-C7EMMtEQ'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-openharmony-arm64-mNZYVM6V',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-openharmony-arm64-mNZYVM6V'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@unrs/.resolver-binding-openharmony-arm64-mNZYVM6V'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-x64-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-x64-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-x64-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-ia32-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-ia32-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-ia32-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-wasm32-wasi',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-wasm32-wasi'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-wasm32-wasi'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-openharmony-arm64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-openharmony-arm64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-openharmony-arm64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-arm64-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-arm64-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-win32-arm64-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-x64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-musleabihf',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-musleabihf'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-musleabihf'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-gnueabihf',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-gnueabihf'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm-gnueabihf'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-freebsd-x64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-freebsd-x64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-freebsd-x64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-x64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-x64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-x64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-arm64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-arm64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-darwin-arm64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm-eabi',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm-eabi'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-android-arm-eabi'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-ia32-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-ia32-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-ia32-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-s390x-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-s390x-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-s390x-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-riscv64-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-x64-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-x64-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-x64-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-arm64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-arm64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-arm64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-loong64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-arm64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-x64',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-x64'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-darwin-x64'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-ppc64-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-ppc64-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@unrs/resolver-binding-linux-ppc64-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-arm64-msvc',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-arm64-msvc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-win32-arm64-msvc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-gnu',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-gnu'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-x64-gnu'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-arm64-musl',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-arm64-musl'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@next/swc-linux-arm64-musl'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.ajv-LayH1Udy',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.ajv-LayH1Udy/.tonic_example.js'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.ajv-LayH1Udy/.tonic_example.js'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.autoprefixer-il1n2FML',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.autoprefixer-il1n2FML/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.autoprefixer-il1n2FML/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.aria-query-aLVx3m8s',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.aria-query-aLVx3m8s/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.aria-query-aLVx3m8s/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-EQuMyZvj',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-EQuMyZvj/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-EQuMyZvj/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.d3-shape-8SIN8W6y',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.d3-shape-8SIN8W6y/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.d3-shape-8SIN8W6y/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.date-fns-r3to5QeC',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.date-fns-r3to5QeC/addDays.js'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.date-fns-r3to5QeC/addDays.js'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.debug-GkzY7J9f',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.debug-GkzY7J9f/CHANGELOG.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.debug-GkzY7J9f/CHANGELOG.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.axobject-query-SDqlHg8R',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.axobject-query-SDqlHg8R/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.axobject-query-SDqlHg8R/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.doctrine-IBcKzMSx',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.doctrine-IBcKzMSx/CHANGELOG.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.doctrine-IBcKzMSx/CHANGELOG.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.caniuse-lite-jPTb8FHR',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.caniuse-lite-jPTb8FHR/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.caniuse-lite-jPTb8FHR/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-react-hvRwPzmm',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-react-hvRwPzmm/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-react-hvRwPzmm/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.semver-RKuLgX70',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.semver-RKuLgX70/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/eslint-plugin-import/node_modules/.semver-RKuLgX70/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.recharts-CxFnEmIY',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.recharts-CxFnEmIY/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.recharts-CxFnEmIY/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.react-dom-xNIlOFfk',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.react-dom-xNIlOFfk/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.react-dom-xNIlOFfk/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.resolve-1cUbn7Xf',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.resolve-1cUbn7Xf/.editorconfig'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.resolve-1cUbn7Xf/.editorconfig'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.sucrase-TMqaqimt',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.sucrase-TMqaqimt/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.sucrase-TMqaqimt/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.tailwindcss-bMun0Ajj',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.tailwindcss-bMun0Ajj/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.tailwindcss-bMun0Ajj/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.lodash-DAuJtmBY',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.lodash-DAuJtmBY/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.lodash-DAuJtmBY/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.es-iterator-helpers-ruYsT1yo',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.es-iterator-helpers-ruYsT1yo/.nycrc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.es-iterator-helpers-ruYsT1yo/.nycrc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@napi-rs/.wasm-runtime-o6vLdndb',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@napi-rs/.wasm-runtime-o6vLdndb/runtime.cjs'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@napi-rs/.wasm-runtime-o6vLdndb/runtime.cjs'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-jsx-a11y-OHltxiAB',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-jsx-a11y-OHltxiAB/.babelrc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.eslint-plugin-jsx-a11y-OHltxiAB/.babelrc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jsx-ast-utils-7uF4yDow',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jsx-ast-utils-7uF4yDow/.babelrc'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jsx-ast-utils-7uF4yDow/.babelrc'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@swc/.helpers-w380VQhK',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@swc/.helpers-w380VQhK/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@swc/.helpers-w380VQhK/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@typescript-eslint/.scope-manager-pvsdDBUb',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@typescript-eslint/.scope-manager-pvsdDBUb/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@typescript-eslint/.scope-manager-pvsdDBUb/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@rushstack/.eslint-patch-zETQ5a7M',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@rushstack/.eslint-patch-zETQ5a7M/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/@rushstack/.eslint-patch-zETQ5a7M/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.acorn-AHIRnWDk',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.acorn-AHIRnWDk/CHANGELOG.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.acorn-AHIRnWDk/CHANGELOG.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.baseline-browser-mapping-ITWTAISH',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.baseline-browser-mapping-ITWTAISH/LICENSE.txt'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.baseline-browser-mapping-ITWTAISH/LICENSE.txt'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.cssesc-MqM3Kgig',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.cssesc-MqM3Kgig/LICENSE-MIT.txt'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.cssesc-MqM3Kgig/LICENSE-MIT.txt'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.browserslist-LrXQTnSZ',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.browserslist-LrXQTnSZ/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.browserslist-LrXQTnSZ/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.json5-P278ZsCc',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.json5-P278ZsCc/LICENSE.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.json5-P278ZsCc/LICENSE.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.loose-envify-dEGSlwbg',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.loose-envify-dEGSlwbg/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.loose-envify-dEGSlwbg/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.napi-postinstall-nvQVMslq',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.napi-postinstall-nvQVMslq/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.napi-postinstall-nvQVMslq/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.nanoid-QqYuzokb',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.nanoid-QqYuzokb/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.nanoid-QqYuzokb/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/node-exports-info/node_modules/.semver-6hMRWCdj',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/node-exports-info/node_modules/.semver-6hMRWCdj/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/node-exports-info/node_modules/.semver-6hMRWCdj/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.glob-21QgPYUx',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.glob-21QgPYUx/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.glob-21QgPYUx/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.semver-LFZzGjnd',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.semver-LFZzGjnd/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.semver-LFZzGjnd/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.update-browserslist-db-pu7MGA1a',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.update-browserslist-db-pu7MGA1a/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.update-browserslist-db-pu7MGA1a/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.which-RLk99l6I',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.which-RLk99l6I/CHANGELOG.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.which-RLk99l6I/CHANGELOG.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jiti-QCLszh4j',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jiti-QCLszh4j/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.jiti-QCLszh4j/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.js-yaml-nolTot24',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.js-yaml-nolTot24/LICENSE'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.js-yaml-nolTot24/LICENSE'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.rimraf-W16JmmIz',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.rimraf-W16JmmIz/CHANGELOG.md'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/.rimraf-W16JmmIz/CHANGELOG.md'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@napi-rs/wasm-runtime',
+npm warn cleanup     [Error: EPERM: operation not permitted, unlink '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@napi-rs/wasm-runtime/fs-proxy.js'] {
+npm warn cleanup       errno: -1,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'unlink',
+npm warn cleanup       path: '/sessions/sharp-confident-mayer/mnt/outputs/build/vcd-clean/node_modules/unrs-resolver/node_modules/@napi-rs/wasm-runtime/fs-proxy.js'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   ... 7 more items
+npm warn cleanup ]
+
+added 16 packages, removed 37 packages, and changed 39 packages in 33s
+EXIT:0
