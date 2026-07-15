@@ -8,6 +8,7 @@ import ContentFilters from "@/components/ContentFilters";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
+import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
 import Nav from "@/components/Nav";
 import PublishHeatmap from "@/components/PublishHeatmap";
 import SourceComparisonTable from "@/components/SourceComparisonTable";
@@ -23,6 +24,7 @@ import {
   computeViewDistribution,
   fetchContentsSmart,
   fetchEventsSmart,
+  fetchLastSync,
   filterContentItems,
   generateCampaignInsights,
   vnDaysAgo,
@@ -48,6 +50,11 @@ export default function CampaignsPage() {
 
   const eventsList = useSWR("vc-events-list", () => fetchEventsSmart(false, LIFECYCLE_LOOKBACK_DAYS + 1));
 
+  // Ngày sync gần nhất - dùng làm mốc "hôm nay" cho countdown campaign/insight thay vì
+  // vnToday() thật (dashboard chỉ sync 1 lần/sáng, xem lib/api.ts generateCampaignInsights).
+  const lastSync = useSWR(LAST_SYNC_SWR_KEY, fetchLastSync, { revalidateOnFocus: false });
+  const referenceDate = lastSync.data?.snapshotDate ?? vnToday();
+
   const lifecycleFrom = vnDaysAgo(LIFECYCLE_LOOKBACK_DAYS);
   const lifecycleTo = vnToday();
   const lifecycleFetch = useSWR(selectedEventId ? ["vc-contents-lifecycle", selectedEventId] : null, () =>
@@ -71,8 +78,8 @@ export default function CampaignsPage() {
   const tagAnalysis = useMemo(() => computeTagAnalysis(items), [items]);
 
   const insights = useMemo(
-    () => generateCampaignInsights(campaignStats, heatmap, viewDist, tagAnalysis),
-    [campaignStats, heatmap, viewDist, tagAnalysis]
+    () => generateCampaignInsights(campaignStats, heatmap, viewDist, tagAnalysis, items, referenceDate),
+    [campaignStats, heatmap, viewDist, tagAnalysis, items, referenceDate]
   );
 
   const lifecycle = useMemo(

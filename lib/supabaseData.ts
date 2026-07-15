@@ -3,10 +3,10 @@
 // (đọc). Không import file này từ component "use client".
 
 import {
+  addDaysToVnDate,
   vnDayEndToUtcIso,
   vnDayStartToUtcIso,
   vnDaysAgo,
-  vnToday,
   type ContentItem,
   type ContentSource,
   type UserDetail,
@@ -597,10 +597,14 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
   // --- week-over-week: dùng snapshot mới nhất mỗi content_id, nhóm theo published_at ---
   const latestRows = dedupeLatestPerContent(rows);
 
-  const thisWeekFrom = vnDaysAgo(6);
-  const thisWeekTo = vnToday();
-  const lastWeekFrom = vnDaysAgo(13);
-  const lastWeekTo = vnDaysAgo(7);
+  // Dashboard chỉ sync 1 lần/sáng nên dữ liệu luôn trễ 1 ngày so với vnToday() thật - nếu neo
+  // "tuần này" vào vnToday(), ngày cuối cùng của khung sẽ luôn rỗng, khiến "tuần này" luôn thấp
+  // hơn "tuần trước" một cách giả tạo. Neo vào snapshot_date mới nhất thực tế có trong `rows`.
+  const anchorDate = rows.reduce((max, r) => (r.snapshot_date > max ? r.snapshot_date : max), fromDate);
+  const thisWeekFrom = addDaysToVnDate(anchorDate, -6);
+  const thisWeekTo = anchorDate;
+  const lastWeekFrom = addDaysToVnDate(anchorDate, -13);
+  const lastWeekTo = addDaysToVnDate(anchorDate, -7);
 
   function metricsFor(from: string, to: string): PeriodMetrics {
     const fromAt = vnDayStartToUtcIso(from);
