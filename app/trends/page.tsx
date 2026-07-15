@@ -62,7 +62,7 @@ export default function TrendsPage() {
           <div className="flex flex-col gap-2">
             <Nav />
             <div>
-              <h1 className="text-xl font-semibold text-emerald-900">Trends – VinWonders</h1>
+              <h1 className="text-xl font-semibold text-emerald-900">Trends - VinWonders</h1>
               <p className="text-sm text-gray-500">
                 View velocity &amp; so sánh tuần - chỉ có được nhờ lịch sử đã sync vào Supabase.
               </p>

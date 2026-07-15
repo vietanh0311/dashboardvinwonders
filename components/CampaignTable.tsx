@@ -77,7 +77,7 @@ export default function CampaignTable({ isLoading, data }: Props) {
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
       <h3 className="mb-3 text-sm font-semibold text-gray-800">Hiệu quả campaign</h3>
-      <p className="mb-3 text-xs text-gray-400">Mặc định sắp theo CPV tăng dần — campaign hiệu quả nhất trên mỗi đồng ở trên cùng.</p>
+      <p className="mb-3 text-xs text-gray-400">Mặc định sắp theo CPV tăng dần - campaign hiệu quả nhất trên mỗi đồng ở trên cùng.</p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -143,7 +143,7 @@ export default function CampaignTable({ isLoading, data }: Props) {
       {!isLoading && sorted.length > 0 && (
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
           <span>
-            {page * PAGE_SIZE + 1}–{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} campaign
+            {page * PAGE_SIZE + 1}-{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} campaign
           </span>
           <div className="flex items-center gap-2">
             <button

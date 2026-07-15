@@ -836,6 +836,11 @@ export type CreatorChannel = {
   username: string | null;
   url: string;
   videos: number;
+  // false = chưa tách được username kênh từ link (link rút gọn chưa resolve,
+  // hoặc link video không lộ username - vd facebook.com/share/r/xxx) - "url"
+  // khi đó chỉ là link của 1 video mẫu, KHÔNG phải link trang kênh, nên UI
+  // không được hiển thị/click như một kênh thật.
+  identified: boolean;
 };
 
 export type CreatorChannelsSummary = {
@@ -850,11 +855,18 @@ export function computeCreatorChannelsSummary(
 ): CreatorChannelsSummary {
   const linkedUsername = profile?.tiktok?.username ?? null;
 
+  // Gộp theo platform+username. Khi chưa tách được username (needsResolve
+  // hoặc link không lộ username), gộp chung 1 dòng "chưa xác định" cho mỗi
+  // platform thay vì 1 dòng/link video - trước đây key rơi về ch.url (khác
+  // nhau ở mỗi video) khiến mỗi video hiện thành 1 "kênh" riêng, và link đó
+  // trỏ thẳng vào video chứ không phải trang kênh.
   const channelMap = new Map<string, CreatorChannel>();
   creatorItems.forEach((item) => {
     const ch = getResolvedChannel(item);
-    const key = `${ch.platform}:${ch.username ? ch.username.toLowerCase() : ch.url}`;
-    const entry = channelMap.get(key) ?? { platform: ch.platform, username: ch.username, url: ch.url, videos: 0 };
+    const identified = !!ch.username;
+    const key = identified ? `${ch.platform}:${ch.username!.toLowerCase()}` : `${ch.platform}:__unidentified__`;
+    const entry =
+      channelMap.get(key) ?? { platform: ch.platform, username: ch.username, url: ch.url, videos: 0, identified };
     entry.videos += 1;
     channelMap.set(key, entry);
   });
@@ -868,6 +880,7 @@ export function computeCreatorChannelsSummary(
         url: `https://www.tiktok.com/@${linkedUsername}`,
         videos:
           channelMap.get(`tiktok:${linkedUsername.toLowerCase()}`)?.videos ?? 0,
+        identified: true,
       }
     : null;
 
@@ -1043,7 +1056,7 @@ export function computeCreatorStats(items: ContentItem[]): CreatorStat[] {
     const publishedAt = item.publishedAt || item.createdAt;
 
     const entry: Accumulator = map.get(creatorId) ?? {
-      name: item.createdBy?.name ?? "—",
+      name: item.createdBy?.name ?? "-",
       workplaceUnitName: item.createdBy?.workplaceUnitName,
       workplaceBrandName: item.createdBy?.workplaceBrandName,
       videos: 0,
@@ -1284,7 +1297,7 @@ export function generateCreatorInsights(
     const top10Pct = (top10Views / totalViews) * 100;
     if (top10Pct > 70) {
       insights.push(
-        `${formatPercent(top10Pct)} views đến từ ${formatNumber(top10Count)} creator (top 10%) — rủi ro phụ thuộc.`
+        `${formatPercent(top10Pct)} views đến từ ${formatNumber(top10Count)} creator (top 10%) - rủi ro phụ thuộc.`
       );
     }
   }
@@ -1298,7 +1311,7 @@ export function generateCreatorInsights(
   });
   if (inactiveStars.length > 0) {
     insights.push(
-      `${formatNumber(inactiveStars.length)} creator tier Ngôi sao không đăng video trong 7 ngày qua — cần re-engage.`
+      `${formatNumber(inactiveStars.length)} creator tier Ngôi sao không đăng video trong 7 ngày qua - cần re-engage.`
     );
   }
 
@@ -1320,7 +1333,7 @@ export function generateCreatorInsights(
   if (bestUnit && byUnit.size > 1) {
     const b = bestUnit as { name: string; avg: number };
     insights.push(
-      `Nhóm cơ sở "${b.name}" có views trung bình/video cao nhất (${formatNumber(b.avg)}) — cân nhắc nhân rộng.`
+      `Nhóm cơ sở "${b.name}" có views trung bình/video cao nhất (${formatNumber(b.avg)}) - cân nhắc nhân rộng.`
     );
   }
 
@@ -1394,7 +1407,7 @@ export function computeViewDistribution(items: ContentItem[]): ViewDistribution 
 
   const buckets = VIEW_HISTOGRAM_EDGES.slice(0, -1).map((edge, i) => {
     const next = VIEW_HISTOGRAM_EDGES[i + 1];
-    const label = next === Infinity ? `>${formatShortNumber(edge)}` : `${formatShortNumber(edge)}–${formatShortNumber(next)}`;
+    const label = next === Infinity ? `>${formatShortNumber(edge)}` : `${formatShortNumber(edge)}-${formatShortNumber(next)}`;
     return { min: edge, max: next, bucket: label, count: 0 };
   });
   views.forEach((v) => {
@@ -1564,7 +1577,7 @@ export function computeCampaignStats(items: ContentItem[]): CampaignStat[] {
     const publishedAt = item.publishedAt || item.createdAt;
 
     const entry: Accumulator = map.get(eventId) ?? {
-      name: item.event?.name ?? "—",
+      name: item.event?.name ?? "-",
       videos: 0,
       rejectedVideos: 0,
       totalViews: 0,
@@ -1680,6 +1693,12 @@ export type TagAnalysis = {
   isAnomalous: boolean;
 };
 
+// Tag do AI tự động gắn khi duyệt video (không phải hành vi creator/campaign) -
+// tăng đột biến số video gắn tag này chỉ phản ánh AI duyệt nhiều/ít hơn tuần
+// trước, không phải dấu hiệu bất thường cần điều tra - loại khỏi cảnh báo
+// "tag tăng đột biến" ở generateCreatorInsights/generateDashboardInsights.
+const AI_AUTO_TAGS = new Set(["Suggest Auto Approved", "Suggest Auto Rejected"]);
+
 export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
   const tagWeekly = new Map<string, Map<string, number>>();
   const tagTotals = new Map<string, { videos: number; totalViews: number }>();
@@ -1719,7 +1738,11 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
         priorCounts.length > 0 ? priorCounts.reduce((sum, c) => sum + c, 0) / priorCounts.length : 0;
 
       // Cần tối thiểu vài video để tránh báo động giả (vd 1 -> 2 video).
-      const isAnomalous = priorWeeks.length > 0 && thisWeekVideos >= 3 && thisWeekVideos > priorAvgWeeklyVideos * 2;
+      const isAnomalous =
+        !AI_AUTO_TAGS.has(name) &&
+        priorWeeks.length > 0 &&
+        thisWeekVideos >= 3 &&
+        thisWeekVideos > priorAvgWeeklyVideos * 2;
 
       return {
         name,
@@ -1756,7 +1779,7 @@ export function generateCampaignInsights(
       insights.push(
         `CPV campaign "${worst.eventName}" = ${formatCurrency(worst.cpv)}, gấp ${ratio.toFixed(
           1
-        )} lần campaign "${best.eventName}" (${formatCurrency(best.cpv)}) — xem lại cơ cấu thưởng.`
+        )} lần campaign "${best.eventName}" (${formatCurrency(best.cpv)}) - xem lại cơ cấu thưởng.`
       );
     }
   }
@@ -1770,7 +1793,7 @@ export function generateCampaignInsights(
       insights.push(
         `Khung giờ ${best.hour}h ${WEEKDAY_LABELS[best.dayOfWeek]} cho avg views cao gấp ${ratio.toFixed(
           1
-        )} lần trung bình — hướng dẫn creators đăng vào giờ này.`
+        )} lần trung bình - hướng dẫn creators đăng vào giờ này.`
       );
     }
   }
@@ -1778,7 +1801,7 @@ export function generateCampaignInsights(
   // 3. % video flop.
   if (viewDist.flopPct > 0) {
     insights.push(
-      `${formatPercent(viewDist.flopPct)} video dưới 200 views (flop) — cần training content cho nhóm creators tier thấp.`
+      `${formatPercent(viewDist.flopPct)} video dưới 200 views (flop) - cần training content cho nhóm creators tier thấp.`
     );
   }
 
@@ -1786,7 +1809,7 @@ export function generateCampaignInsights(
   const anomalousTags = tagAnalysis.filter((t) => t.isAnomalous);
   if (anomalousTags.length > 0) {
     const names = anomalousTags.map((t) => `"${t.name}"`).join(", ");
-    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này — cần kiểm tra nguyên nhân.`);
+    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này - cần kiểm tra nguyên nhân.`);
   }
 
   // 5. Phân phối views lệch nhiều (mean >> median) - phụ thuộc video viral.
@@ -1794,7 +1817,7 @@ export function generateCampaignInsights(
     insights.push(
       `Views trung bình (${formatNumber(viewDist.mean)}) cao hơn nhiều so với trung vị (${formatNumber(
         viewDist.median
-      )}) — kết quả đang phụ thuộc vào một số video viral.`
+      )}) - kết quả đang phụ thuộc vào một số video viral.`
     );
   }
 
@@ -1823,7 +1846,7 @@ export function generateDashboardInsights(
       insights.push(
         `Hôm nay mới có ${formatNumber(videosToday)} video, thấp hơn ${formatPercent(
           Math.abs(diffPct)
-        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ — nhắc creator đăng bài.`
+        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ - nhắc creator đăng bài.`
       );
     } else if (diffPct >= 30) {
       insights.push(
@@ -1840,7 +1863,7 @@ export function generateDashboardInsights(
     insights.push(
       `${SOURCE_LABEL[wasteful.source] ?? wasteful.source} chiếm ${formatPercent(
         wasteful.videoPct
-      )} video nhưng chỉ ${formatPercent(wasteful.viewPct)} views — cân nhắc giảm ưu tiên nền tảng này.`
+      )} video nhưng chỉ ${formatPercent(wasteful.viewPct)} views - cân nhắc giảm ưu tiên nền tảng này.`
     );
   }
 
@@ -1850,7 +1873,7 @@ export function generateDashboardInsights(
     const pct = (topEvent.videos / metrics.totalVideos) * 100;
     if (pct > 50) {
       insights.push(
-        `Sự kiện "${topEvent.name}" chiếm ${formatPercent(pct)} tổng video trong kỳ — rủi ro phụ thuộc vào 1 campaign.`
+        `Sự kiện "${topEvent.name}" chiếm ${formatPercent(pct)} tổng video trong kỳ - rủi ro phụ thuộc vào 1 campaign.`
       );
     }
   }
@@ -1862,7 +1885,7 @@ export function generateDashboardInsights(
       .slice(0, 3)
       .map((t) => `"${t.name}"`)
       .join(", ");
-    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này — cần kiểm tra nguyên nhân.`);
+    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này - cần kiểm tra nguyên nhân.`);
   }
 
   // 5. Trung bình video/creator thấp - phần lớn creator chỉ đăng 1 lần rồi không quay lại.
@@ -1872,7 +1895,7 @@ export function generateDashboardInsights(
       insights.push(
         `Trung bình mỗi creator chỉ đăng ${avgVideosPerCreator.toFixed(
           1
-        )} video trong kỳ — phần lớn đăng 1 lần rồi không quay lại, cân nhắc chương trình giữ chân creator.`
+        )} video trong kỳ - phần lớn đăng 1 lần rồi không quay lại, cân nhắc chương trình giữ chân creator.`
       );
     }
   }

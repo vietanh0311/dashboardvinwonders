@@ -162,7 +162,7 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
                     className="cursor-pointer border-t border-gray-100 hover:bg-emerald-50/50"
                   >
                     <td className="whitespace-nowrap py-2 pr-3 font-medium text-gray-800">{row.name}</td>
-                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{row.workplaceUnitName ?? "—"}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{row.workplaceUnitName ?? "-"}</td>
                     <td className="whitespace-nowrap py-2 pr-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TIER_BADGE[row.tier]}`}>
                         {CREATOR_TIER_LABEL[row.tier]}
@@ -192,7 +192,7 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
                           )}
                         </span>
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-gray-600">
@@ -208,14 +208,14 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
                           )}
                         </span>
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-gray-600">
-                      {!profile ? <NotLoadedCell /> : profile.info?.cityName ?? "—"}
+                      {!profile ? <NotLoadedCell /> : profile.info?.cityName ?? "-"}
                     </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-gray-600">
-                      {!profile ? <NotLoadedCell /> : profile.contract?.status ?? "—"}
+                      {!profile ? <NotLoadedCell /> : profile.contract?.status ?? "-"}
                     </td>
                     <td className="py-2">
                       {!channels ? (
@@ -234,19 +234,29 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
                               🔗 @{channels.linkedChannel.username}
                             </a>
                           )}
-                          {channels.postedChannels.map((c) => (
-                            <a
-                              key={`${c.platform}-${c.username ?? c.url}`}
-                              href={c.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Kênh hay đăng video"
-                              className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
-                            >
-                              {c.username ? `@${c.username}` : CHANNEL_PLATFORM_LABEL[c.platform]} · {c.videos}
-                            </a>
-                          ))}
+                          {channels.postedChannels.map((c) =>
+                            c.identified ? (
+                              <a
+                                key={`${c.platform}-${c.username}`}
+                                href={c.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Kênh hay đăng video"
+                                className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
+                              >
+                                @{c.username} · {c.videos}
+                              </a>
+                            ) : (
+                              <span
+                                key={`${c.platform}-unidentified`}
+                                title="Chưa biết chính xác kênh của những video này - bấm 'Tải profile' để kiểm tra lại nhé"
+                                className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400"
+                              >
+                                {CHANNEL_PLATFORM_LABEL[c.platform]} · {c.videos} (chưa rõ kênh)
+                              </span>
+                            )
+                          )}
                           {channels.offChannelWarning && (
                             <span
                               title="Có video đăng bằng kênh TikTok khác kênh đã liên kết"
@@ -255,7 +265,7 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
                               ⚠ đăng ngoài kênh liên kết
                             </span>
                           )}
-                          {!channels.linkedChannel && channels.postedChannels.length === 0 && "—"}
+                          {!channels.linkedChannel && channels.postedChannels.length === 0 && "-"}
                         </div>
                       )}
                     </td>
@@ -277,7 +287,7 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
       {!isLoading && sorted.length > 0 && (
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
           <span>
-            {page * PAGE_SIZE + 1}–{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} creator
+            {page * PAGE_SIZE + 1}-{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} creator
           </span>
           <div className="flex items-center gap-2">
             <button

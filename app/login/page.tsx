@@ -44,7 +44,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-emerald-50/40 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-xl border border-emerald-100 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-emerald-900">Dashboard V-Creators – VinWonders</h1>
+        <h1 className="mb-1 text-lg font-semibold text-emerald-900">Dashboard V-Creators - VinWonders</h1>
         <p className="mb-4 text-sm text-gray-500">Nhập mật khẩu để tiếp tục.</p>
 
         <input

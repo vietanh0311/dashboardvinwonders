@@ -47,7 +47,7 @@ export default function CampaignLifecycleChart({
           onChange={(e) => onSelectEvent(e.target.value)}
           className="rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-emerald-400"
         >
-          <option value="">— Chọn campaign —</option>
+          <option value="">- Chọn campaign -</option>
           {events.map((ev) => (
             <option key={ev._id} value={ev._id}>
               {ev.name}
@@ -78,11 +78,11 @@ export default function CampaignLifecycleChart({
                 <>
                   <span className="font-semibold">Đang nguội:</span> 7 ngày gần nhất đều dưới 50% đỉnh (đỉnh{" "}
                   {formatNumber(momentum.peakViews)} views ngày {formatDateLabel(momentum.peakDate)}, hiện còn{" "}
-                  {formatNumber(momentum.latestViews)} views/ngày) — cần đợt push mới hoặc cân nhắc đóng campaign.
+                  {formatNumber(momentum.latestViews)} views/ngày) - cần đợt push mới hoặc cân nhắc đóng campaign.
                 </>
               ) : (
                 <>
-                  Còn momentum — đỉnh {formatNumber(momentum.peakViews)} views ngày{" "}
+                  Còn momentum - đỉnh {formatNumber(momentum.peakViews)} views ngày{" "}
                   {formatDateLabel(momentum.peakDate)}, hiện {formatNumber(momentum.latestViews)} views/ngày (
                   {momentum.declineFromPeakPct > 0
                     ? `giảm ${momentum.declineFromPeakPct.toFixed(0)}% so đỉnh`
