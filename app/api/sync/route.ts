@@ -29,6 +29,12 @@ export async function POST(request: NextRequest) {
   if (!token) {
     return NextResponse.json({ error: "missing token" }, { status: 401 });
   }
+  // Mặc định chỉ tải profile cho creator MỚI (nhanh, tránh gọi lại API thật
+  // cho hàng nghìn creator đã có sẵn). Bật cờ này để tải lại profile của TẤT
+  // CẢ creator xuất hiện trong cửa sổ ngày đang sync - dùng khi cần cập nhật
+  // SĐT/xác minh SĐT/hợp đồng mới nhất cho creator đã có trong DB (các trường
+  // này chỉ có ở API live /users/<id>, không tự cập nhật nếu không refresh).
+  const refreshCreators = request.headers.get("x-vc-refresh-creators") === "1";
 
   const encoder = new TextEncoder();
 
@@ -90,24 +96,30 @@ export async function POST(request: NextRequest) {
           send({ type: "progress", stage: "resolve_channels", done: resolvedDone, total: toResolve.length });
         });
 
-        // --- Creators mới: fetch profile đầy đủ qua /users/<id> để upsert vào
-        // bảng creators. Creator đã có sẵn trong DB thì bỏ qua (không gọi lại). ---
+        // --- Creators: fetch profile đầy đủ qua /users/<id> để upsert vào bảng
+        // creators. Mặc định chỉ fetch creator MỚI; nếu refreshCreators=true thì
+        // fetch lại toàn bộ creator xuất hiện trong cửa sổ ngày (để cập nhật
+        // SĐT/xác minh SĐT/hợp đồng mới nhất cho cả creator đã có trong DB). ---
         const creatorIds = Array.from(
           new Set(items.map((it) => it.createdBy?._id).filter((id): id is string => !!id))
         );
         const existingCreatorIds = await fetchExistingCreatorIds(creatorIds);
-        const newCreatorIds = creatorIds.filter((id) => !existingCreatorIds.has(id));
+        const creatorIdsToFetch = refreshCreators
+          ? creatorIds
+          : creatorIds.filter((id) => !existingCreatorIds.has(id));
 
         send({
           type: "stage",
           stage: "creators",
-          message: `Đang tải profile cho ${newCreatorIds.length} creator mới...`,
-          total: newCreatorIds.length,
+          message: refreshCreators
+            ? `Đang tải lại profile cho ${creatorIdsToFetch.length} creator...`
+            : `Đang tải profile cho ${creatorIdsToFetch.length} creator mới...`,
+          total: creatorIdsToFetch.length,
         });
 
         const creatorRows: CreatorRow[] = [];
         let creatorsDone = 0;
-        await runWithConcurrency(newCreatorIds, 5, async (creatorId) => {
+        await runWithConcurrency(creatorIdsToFetch, 5, async (creatorId) => {
           try {
             const profile = await fetchUserDetailServer(token, creatorId);
             const fallbackItem = items.find((it) => it.createdBy?._id === creatorId);
@@ -117,9 +129,11 @@ export async function POST(request: NextRequest) {
               hashtag: profile?.hashtag ?? fallbackItem?.createdBy?.hashtag ?? null,
               email: profile?.email ?? null,
               phone: profile?.phone?.full ?? null,
+              phone_verified: profile?.phone?.verified ?? null,
               city: profile?.info?.cityName ?? null,
               tiktok_username: profile?.tiktok?.username ?? null,
               contract_status: profile?.contract?.status ?? null,
+              contract_name: profile?.contract?.name ?? null,
               account_type: profile?.accountType ?? null,
               last_activated_at: profile?.lastActivatedAt ?? null,
               updated_at: new Date().toISOString(),
@@ -129,7 +143,7 @@ export async function POST(request: NextRequest) {
             // được lưu vào bảng videos, chỉ thiếu profile trong bảng creators.
           } finally {
             creatorsDone += 1;
-            send({ type: "progress", stage: "creators", done: creatorsDone, total: newCreatorIds.length });
+            send({ type: "progress", stage: "creators", done: creatorsDone, total: creatorIdsToFetch.length });
           }
         });
 

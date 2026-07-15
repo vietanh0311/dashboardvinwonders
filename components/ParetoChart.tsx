@@ -22,7 +22,7 @@ export default function ParetoChart({ isLoading, pareto }: Props) {
 
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-gray-800">Phân tích Pareto — views theo creator</h3>
+      <h3 className="mb-1 text-sm font-semibold text-gray-800">Phân tích Pareto - views theo creator</h3>
 
       {!isLoading && !isEmpty && (
         <p className="mb-3 text-sm text-gray-600">

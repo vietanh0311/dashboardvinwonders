@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import type { ReactNode } from "react";
 import { SOURCE_META } from "@/components/DailyChart";
 import {
+  CHANNEL_PLATFORM_LABEL,
   CREATOR_TIER_LABEL,
   daysSince,
   formatCurrency,
@@ -24,7 +25,7 @@ type Props = {
 };
 
 function formatDate(value?: string) {
-  if (!value) return "—";
+  if (!value) return "-";
   try {
     return format(parseISO(value), "dd/MM/yyyy HH:mm");
   } catch {
@@ -33,7 +34,7 @@ function formatDate(value?: string) {
 }
 
 function formatBirthDay(value?: string) {
-  if (!value) return "—";
+  if (!value) return "-";
   try {
     return format(parseISO(value), "dd/MM/yyyy");
   } catch {
@@ -91,7 +92,7 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
             )}
             <div className="min-w-0">
               <div className="truncate text-base font-semibold text-gray-900">{creator.name}</div>
-              <div className="text-xs text-gray-500">{profile?.hashtag ?? creator.workplaceUnitName ?? "—"}</div>
+              <div className="text-xs text-gray-500">{profile?.hashtag ?? creator.workplaceUnitName ?? "-"}</div>
               <span className="mt-1 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                 {CREATOR_TIER_LABEL[creator.tier]}
               </span>
@@ -132,17 +133,27 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
                   )}
                   {channels?.postedChannels
                     .filter((c) => c.username !== channels.linkedChannel?.username || c.platform !== "tiktok")
-                    .map((c) => (
-                      <a
-                        key={`${c.platform}-${c.username ?? c.url}`}
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
-                      >
-                        {c.username ? `@${c.username}` : c.platform} · {c.videos} video
-                      </a>
-                    ))}
+                    .map((c) =>
+                      c.identified ? (
+                        <a
+                          key={`${c.platform}-${c.username}`}
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
+                        >
+                          @{c.username} · {c.videos} video
+                        </a>
+                      ) : (
+                        <span
+                          key={`${c.platform}-unidentified`}
+                          title="Chưa biết chính xác kênh của những video này"
+                          className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400"
+                        >
+                          {CHANNEL_PLATFORM_LABEL[c.platform]} · {c.videos} video (chưa rõ kênh)
+                        </span>
+                      )
+                    )}
                 </div>
                 {channels?.offChannelWarning && (
                   <div className="mt-1.5 text-xs font-medium text-amber-700">
@@ -156,7 +167,7 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
                   label="Email"
                   value={
                     <span className="inline-flex items-center gap-1">
-                      {profile.email ?? "—"}
+                      {profile.email ?? "-"}
                       {profile.emailVerified && <span className="text-emerald-600">✓</span>}
                     </span>
                   }
@@ -165,23 +176,23 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
                   label="Số điện thoại"
                   value={
                     <span className="inline-flex items-center gap-1">
-                      {profile.phone?.full ?? "—"}
+                      {profile.phone?.full ?? "-"}
                       {profile.phone?.verified && <span className="text-emerald-600">✓</span>}
                     </span>
                   }
                 />
                 <Field label="Ngày sinh" value={formatBirthDay(profile.info?.birthDay)} />
-                <Field label="Giới tính" value={profile.info?.gender ?? "—"} />
-                <Field label="Thành phố" value={profile.info?.cityName ?? "—"} />
-                <Field label="Loại tài khoản" value={profile.accountType ?? "—"} />
+                <Field label="Giới tính" value={profile.info?.gender ?? "-"} />
+                <Field label="Thành phố" value={profile.info?.cityName ?? "-"} />
+                <Field label="Loại tài khoản" value={profile.accountType ?? "-"} />
               </div>
 
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase text-gray-400">Hợp đồng</div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Tên hợp đồng" value={profile.contract?.name ?? "—"} />
-                  <Field label="Mã số thuế" value={profile.contract?.taxNumber ?? "—"} />
-                  <Field label="Trạng thái" value={profile.contract?.status ?? "—"} />
+                  <Field label="Tên hợp đồng" value={profile.contract?.name ?? "-"} />
+                  <Field label="Mã số thuế" value={profile.contract?.taxNumber ?? "-"} />
+                  <Field label="Trạng thái" value={profile.contract?.status ?? "-"} />
                 </div>
               </div>
 
@@ -192,7 +203,7 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
                     label="Bị khoá (banned)"
                     value={
                       profile.banned ? (
-                        <span className="font-medium text-red-600">Có{profile.bannedReason ? ` — ${profile.bannedReason}` : ""}</span>
+                        <span className="font-medium text-red-600">Có{profile.bannedReason ? ` - ${profile.bannedReason}` : ""}</span>
                       ) : (
                         "Không"
                       )

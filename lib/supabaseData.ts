@@ -46,9 +46,11 @@ export type CreatorRow = {
   hashtag: string | null;
   email: string | null;
   phone: string | null;
+  phone_verified: boolean | null;
   city: string | null;
   tiktok_username: string | null;
   contract_status: string | null;
+  contract_name: string | null;
   account_type: string | null;
   last_activated_at: string | null;
   updated_at: string;
@@ -105,7 +107,7 @@ export function videoRowToContentItem(row: VideoRow): ContentItem {
     partner: null,
     createdBy: {
       _id: row.creator_id ?? "",
-      name: row.creator_name ?? "—",
+      name: row.creator_name ?? "-",
       workplaceUnitName: row.workplace_unit ?? undefined,
     },
     warningTags: row.tags ?? [],
@@ -123,10 +125,13 @@ export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
   return {
     _id: row.creator_id,
     email: row.email ?? undefined,
-    phone: row.phone ? { full: row.phone } : undefined,
+    phone: row.phone ? { full: row.phone, verified: row.phone_verified ?? undefined } : undefined,
     tiktok: row.tiktok_username ? { username: row.tiktok_username } : undefined,
     info: row.city ? { cityName: row.city } : undefined,
-    contract: row.contract_status ? { status: row.contract_status } : undefined,
+    contract:
+      row.contract_status || row.contract_name
+        ? { status: row.contract_status ?? undefined, name: row.contract_name ?? undefined }
+        : undefined,
     hashtag: row.hashtag ?? undefined,
     accountType: row.account_type ?? undefined,
     lastActivatedAt: row.last_activated_at ?? undefined,
@@ -158,22 +163,53 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 // và gộp lại, nếu không dữ liệu sẽ bị cắt cụt ở dòng thứ 1000.
 const SUPABASE_PAGE_SIZE = 1000;
 
+// buildQuery nên select("*", { count: "exact" }) để trang đầu trả về luôn tổng
+// số dòng khớp filter - cho phép bắn song song toàn bộ các trang còn lại thay
+// vì đợi tuần tự (trước đây: N trang = N round-trip nối tiếp tới Supabase, mỗi
+// round-trip ~400-500ms - 1 khoảng 30 ngày ra ~14 trang thì mất 5-6s chỉ để
+// tải dữ liệu). Nếu buildQuery không trả count (vd không truyền { count:
+// "exact" }), fallback về phân trang tuần tự như cũ.
 async function fetchAllRows<T>(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+  buildQuery: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null; count?: number | null }>
 ): Promise<T[]> {
-  const rows: T[] = [];
-  let page = 0;
+  const first = await buildQuery(0, SUPABASE_PAGE_SIZE - 1);
+  if (first.error) throw first.error;
+  const firstChunk = first.data ?? [];
+  const rows: T[] = [...firstChunk];
 
-  while (true) {
-    const from = page * SUPABASE_PAGE_SIZE;
-    const to = from + SUPABASE_PAGE_SIZE - 1;
-    const { data, error } = await buildQuery(from, to);
-    if (error) throw error;
-    const chunk = data ?? [];
-    rows.push(...chunk);
-    if (chunk.length < SUPABASE_PAGE_SIZE) break;
-    page += 1;
+  if (firstChunk.length < SUPABASE_PAGE_SIZE) return rows;
+
+  if (typeof first.count !== "number") {
+    let page = 1;
+    while (true) {
+      const from = page * SUPABASE_PAGE_SIZE;
+      const to = from + SUPABASE_PAGE_SIZE - 1;
+      const { data, error } = await buildQuery(from, to);
+      if (error) throw error;
+      const chunk = data ?? [];
+      rows.push(...chunk);
+      if (chunk.length < SUPABASE_PAGE_SIZE) break;
+      page += 1;
+    }
+    return rows;
   }
+
+  const totalPages = Math.ceil(first.count / SUPABASE_PAGE_SIZE);
+  const remainingPages = Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) => i + 1);
+
+  const restChunks = await Promise.all(
+    remainingPages.map(async (page) => {
+      const from = page * SUPABASE_PAGE_SIZE;
+      const to = from + SUPABASE_PAGE_SIZE - 1;
+      const { data, error } = await buildQuery(from, to);
+      if (error) throw error;
+      return data ?? [];
+    })
+  );
+  restChunks.forEach((chunk) => rows.push(...chunk));
 
   return rows;
 }
@@ -198,7 +234,7 @@ export async function fetchLatestVideosByPublishedRange(
   const rows = await fetchAllRows<VideoRow>((from, to) => {
     let query = supabase
       .from("videos")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("is_latest", true)
       .gte("published_at", fromAt)
       .lte("published_at", toAt)
@@ -220,7 +256,9 @@ export async function fetchLatestVideosByPublishedRange(
 
 export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
   const supabase = getSupabaseAdmin();
-  return fetchAllRows<CreatorRow>((from, to) => supabase.from("creators").select("*").range(from, to));
+  return fetchAllRows<CreatorRow>((from, to) =>
+    supabase.from("creators").select("*", { count: "exact" }).range(from, to)
+  );
 }
 
 export type EventOption = { _id: string; name: string };
@@ -236,7 +274,7 @@ export async function fetchDistinctEvents(sinceDate: string): Promise<EventOptio
   const rows = await fetchAllRows<{ event_id: string | null; event_name: string | null }>((from, to) =>
     supabase
       .from("videos")
-      .select("event_id, event_name")
+      .select("event_id, event_name", { count: "exact" })
       .eq("is_latest", true)
       .not("event_id", "is", null)
       .gte("published_at", fromAt)
@@ -511,7 +549,7 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
   const rows = await fetchAllRows<VideoRow>((from, to) =>
     supabase
       .from("videos")
-      .select("*")
+      .select("*", { count: "exact" })
       .gte("snapshot_date", fromDate)
       .order("snapshot_date", { ascending: true })
       .range(from, to)
@@ -546,7 +584,7 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
       title: last.title ?? "",
       link: last.link ?? "",
       source: last.source ?? "",
-      creatorName: last.creator_name ?? "—",
+      creatorName: last.creator_name ?? "-",
       views: last.views ?? 0,
       prevViews: prev.views ?? 0,
       deltaViews,

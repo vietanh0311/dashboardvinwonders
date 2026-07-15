@@ -72,8 +72,8 @@ export default function PublishHeatmap({ isLoading, data }: Props) {
                         key={h}
                         title={
                           cell && cell.videos > 0
-                            ? `${label} ${h}h — ${formatNumber(cell.videos)} video, avg ${formatNumber(cell.avgViews)} views`
-                            : `${label} ${h}h — chưa có video`
+                            ? `${label} ${h}h - ${formatNumber(cell.videos)} video, avg ${formatNumber(cell.avgViews)} views`
+                            : `${label} ${h}h - chưa có video`
                         }
                         className="h-6 w-6 rounded-sm"
                         style={{ backgroundColor: cellColor(intensity) }}

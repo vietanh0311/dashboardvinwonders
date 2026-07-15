@@ -27,7 +27,7 @@ export default function ViewDistributionPanel({ isLoading, data }: Props) {
                 {formatNumber(data.mean)}
               </div>
               <div className={`mt-1 text-xs ${skewed ? "text-amber-600" : "text-gray-400"}`}>
-                {skewed ? "Lệch nhiều — phụ thuộc video viral" : "Phân phối tương đối đều"}
+                {skewed ? "Lệch nhiều - phụ thuộc video viral" : "Phân phối tương đối đều"}
               </div>
             </div>
             <div className="rounded-lg border border-gray-100 p-3">

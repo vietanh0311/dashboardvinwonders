@@ -54,7 +54,7 @@ export default function CreatorsPage() {
 
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
 
-  const [filterUnverifiedPhone, setFilterUnverifiedPhone] = useState(false);
+  const [filterNoPhone, setFilterNoPhone] = useState(false);
   const [filterNoContract, setFilterNoContract] = useState(false);
   const [filterInactive30, setFilterInactive30] = useState(false);
 
@@ -121,15 +121,20 @@ export default function CreatorsPage() {
 
   // Cờ lọc nhanh - chỉ áp dụng chính xác cho creator đã tải profile; creator
   // chưa tải profile bị loại khỏi các bộ lọc này (không đủ dữ liệu để đánh giá).
+  // Lưu ý: profile.phone.verified và profile.contract.name không có trong dữ
+  // liệu đồng bộ từ Supabase (chỉ API live /users/<id> mới trả về, nhưng route
+  // đó cần token và UI nhập token đã bị ẩn) - nên "Chưa xác minh SĐT" dùng
+  // "không có SĐT" thay vì "SĐT chưa xác minh", và "Chưa có hợp đồng" chỉ xét
+  // contract.status (không đòi thêm contract.name).
   const filteredCreators = useMemo(() => {
-    if (!filterUnverifiedPhone && !filterNoContract && !filterInactive30) return creatorsWithTier;
+    if (!filterNoPhone && !filterNoContract && !filterInactive30) return creatorsWithTier;
 
     return creatorsWithTier.filter((c) => {
       const profile = userProfiles.get(c.creatorId);
       if (!profile) return false;
 
-      if (filterUnverifiedPhone && profile.phone?.verified) return false;
-      if (filterNoContract && profile.contract?.status && profile.contract?.name) return false;
+      if (filterNoPhone && profile.phone?.full) return false;
+      if (filterNoContract && profile.contract?.status) return false;
       if (filterInactive30) {
         const days = daysSince(profile.lastActivatedAt);
         if (days === null || days <= 30) return false;
@@ -137,7 +142,7 @@ export default function CreatorsPage() {
 
       return true;
     });
-  }, [creatorsWithTier, userProfiles, filterUnverifiedPhone, filterNoContract, filterInactive30]);
+  }, [creatorsWithTier, userProfiles, filterNoPhone, filterNoContract, filterInactive30]);
 
   // Nhóm video hiện tại theo creator để tính kênh (chip Kênh + drawer).
   const itemsByCreator = useMemo(() => {
@@ -219,7 +224,7 @@ export default function CreatorsPage() {
           <div className="flex flex-col gap-2">
             <Nav />
             <div>
-              <h1 className="text-xl font-semibold text-emerald-900">Creators – VinWonders</h1>
+              <h1 className="text-xl font-semibold text-emerald-900">Creators - VinWonders</h1>
               <p className="text-sm text-gray-500">
                 Khoảng thời gian: <span className="font-medium text-gray-700">{rangeLabel}</span> · so sánh creator
                 mới với 30 ngày trước đó ({previousFrom} → {previousTo})
@@ -261,11 +266,11 @@ export default function CreatorsPage() {
             <label className="flex items-center gap-1.5 text-gray-600">
               <input
                 type="checkbox"
-                checked={filterUnverifiedPhone}
-                onChange={(e) => setFilterUnverifiedPhone(e.target.checked)}
+                checked={filterNoPhone}
+                onChange={(e) => setFilterNoPhone(e.target.checked)}
                 className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
               />
-              Chưa xác minh SĐT
+              Chưa có SĐT
             </label>
             <label className="flex items-center gap-1.5 text-gray-600">
               <input

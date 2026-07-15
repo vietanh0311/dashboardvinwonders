@@ -80,11 +80,11 @@ export default function ContentTable({ items, isLoading }: Props) {
                       </div>
                     </div>
                   </td>
-                  <td className="whitespace-nowrap py-2 pr-2 text-gray-600">{item.createdBy?.name ?? "—"}</td>
-                  <td className="whitespace-nowrap py-2 pr-2 text-gray-600">{item.event?.name ?? "—"}</td>
+                  <td className="whitespace-nowrap py-2 pr-2 text-gray-600">{item.createdBy?.name ?? "-"}</td>
+                  <td className="whitespace-nowrap py-2 pr-2 text-gray-600">{item.event?.name ?? "-"}</td>
                   <td className="py-2 pr-2">
                     <div className="flex flex-wrap gap-1">
-                      {(item.warningTags ?? []).length === 0 && <span className="text-gray-300">—</span>}
+                      {(item.warningTags ?? []).length === 0 && <span className="text-gray-300">-</span>}
                       {(item.warningTags ?? []).map((tag) => (
                         <span
                           key={tag._id}

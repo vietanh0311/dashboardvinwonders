@@ -3,10 +3,16 @@
 // dữ liệu" trên UI. Logic giống hệt app/api/sync/route.ts (dùng chung
 // lib/vcServer.ts + lib/supabaseData.ts) nên không cần chạy `npm run dev`.
 //
-// Dùng: npm run sync -- <vc-token> [số-ngày]
+// Dùng: npm run sync -- <vc-token> [số-ngày] [--refresh-creators]
 // (token hết hạn sau vài tiếng - lấy token mới mỗi lần chạy; mặc định cào 90
 // ngày/3 tháng gần nhất - video/creator đã có sẵn trong DB được bỏ qua ở bước
 // resolve kênh/tải profile nên các lần chạy sau không bị chậm lại)
+//
+// --refresh-creators: tải lại profile đầy đủ (SĐT, trạng thái xác minh SĐT,
+// tên hợp đồng...) cho TẤT CẢ creator xuất hiện trong cửa sổ ngày đang sync,
+// kể cả creator đã có sẵn trong DB (mặc định các creator này bị bỏ qua để
+// chạy nhanh). Dùng khi cần cập nhật lại thông tin creator đã cũ - chạy chậm
+// hơn hẳn vì gọi lại API thật cho từng creator.
 
 import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type ContentItem } from "../lib/api";
 import { resolveTikTokLink } from "../lib/linkResolver";
@@ -25,13 +31,17 @@ import { fetchContentsRangeServer, fetchUserDetailServer } from "../lib/vcServer
 const DEFAULT_SYNC_WINDOW_DAYS = 90;
 
 async function main() {
-  const token = process.argv[2] || process.env.VC_TOKEN;
+  const args = process.argv.slice(2);
+  const refreshCreators = args.includes("--refresh-creators");
+  const positional = args.filter((a) => !a.startsWith("--"));
+
+  const token = positional[0] || process.env.VC_TOKEN;
   if (!token) {
-    console.error("Thiếu token. Dùng: npm run sync -- <vc-token> [số-ngày]");
+    console.error("Thiếu token. Dùng: npm run sync -- <vc-token> [số-ngày] [--refresh-creators]");
     process.exit(1);
   }
 
-  const daysArg = Number(process.argv[3]);
+  const daysArg = Number(positional[1]);
   const SYNC_WINDOW_DAYS = Number.isFinite(daysArg) && daysArg > 0 ? daysArg : DEFAULT_SYNC_WINDOW_DAYS;
 
   const startedAt = Date.now();
@@ -76,12 +86,16 @@ async function main() {
 
   const creatorIds = Array.from(new Set(items.map((it) => it.createdBy?._id).filter((id): id is string => !!id)));
   const existingCreatorIds = await fetchExistingCreatorIds(creatorIds);
-  const newCreatorIds = creatorIds.filter((id) => !existingCreatorIds.has(id));
+  const creatorIdsToFetch = refreshCreators ? creatorIds : creatorIds.filter((id) => !existingCreatorIds.has(id));
 
-  console.log(`Đang tải profile cho ${newCreatorIds.length} creator mới...`);
+  console.log(
+    refreshCreators
+      ? `Đang tải lại profile cho ${creatorIdsToFetch.length} creator (--refresh-creators)...`
+      : `Đang tải profile cho ${creatorIdsToFetch.length} creator mới...`
+  );
   const creatorRows: CreatorRow[] = [];
   let creatorsDone = 0;
-  await runWithConcurrency(newCreatorIds, 5, async (creatorId) => {
+  await runWithConcurrency(creatorIdsToFetch, 5, async (creatorId) => {
     try {
       const profile = await fetchUserDetailServer(token, creatorId);
       const fallbackItem = items.find((it) => it.createdBy?._id === creatorId);
@@ -91,9 +105,11 @@ async function main() {
         hashtag: profile?.hashtag ?? fallbackItem?.createdBy?.hashtag ?? null,
         email: profile?.email ?? null,
         phone: profile?.phone?.full ?? null,
+        phone_verified: profile?.phone?.verified ?? null,
         city: profile?.info?.cityName ?? null,
         tiktok_username: profile?.tiktok?.username ?? null,
         contract_status: profile?.contract?.status ?? null,
+        contract_name: profile?.contract?.name ?? null,
         account_type: profile?.accountType ?? null,
         last_activated_at: profile?.lastActivatedAt ?? null,
         updated_at: new Date().toISOString(),
@@ -102,8 +118,8 @@ async function main() {
       // Bỏ qua creator lỗi (vd tài khoản đã bị xoá).
     } finally {
       creatorsDone += 1;
-      if (creatorsDone % 20 === 0 || creatorsDone === newCreatorIds.length) {
-        console.log(`  profile creator: ${creatorsDone}/${newCreatorIds.length}`);
+      if (creatorsDone % 20 === 0 || creatorsDone === creatorIdsToFetch.length) {
+        console.log(`  profile creator: ${creatorsDone}/${creatorIdsToFetch.length}`);
       }
     }
   });
@@ -119,8 +135,8 @@ async function main() {
 
   console.log("");
   console.log(
-    `✓ Xong: ${items.length} video (${newVideoIds.size} mới), ${creatorRows.length} creator mới, ` +
-      `${((Date.now() - startedAt) / 1000).toFixed(1)}s, synced lúc ${syncedAt}.`
+    `✓ Xong: ${items.length} video (${newVideoIds.size} mới), ${creatorRows.length} creator ` +
+      `${refreshCreators ? "đã tải lại" : "mới"}, ${((Date.now() - startedAt) / 1000).toFixed(1)}s, synced lúc ${syncedAt}.`
   );
 }
 

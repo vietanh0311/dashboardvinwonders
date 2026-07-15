@@ -34,36 +34,57 @@ function buildQuery(params?: Record<string, string | number | undefined>) {
   return qs ? `?${qs}` : "";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// 502/503/504 là lỗi gateway/hạ tầng phía VC API (Cloudflare trước origin) -
+// thường tự khỏi sau 1-2 lần thử lại, đặc biệt khi sync kéo dài hàng chục
+// request liên tiếp (90 ngày ~ 70+ trang content, hoặc tải profile hàng nghìn
+// creator). Không retry lỗi mạng/timeout của chính request (throw ngay) vì có
+// thể do token/kết nối sai, không phải lỗi thoáng qua.
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const MAX_RETRIES = 3;
+
 async function vcServerFetch<T = unknown>(
   path: string,
   token: string,
   params?: Record<string, string | number | undefined>
 ): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${VC_API_BASE_URL}/${path}${buildQuery(params)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-  } catch {
-    throw new VcServerError(0, "Không kết nối được tới VC API (lỗi mạng).");
-  }
-
-  if (!res.ok) {
-    let message = res.statusText || `Lỗi ${res.status}`;
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
     try {
-      const body = await res.json();
-      message = body?.error ?? message;
+      res = await fetch(`${VC_API_BASE_URL}/${path}${buildQuery(params)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
     } catch {
-      // Body lỗi không phải JSON hợp lệ - giữ message mặc định.
+      throw new VcServerError(0, "Không kết nối được tới VC API (lỗi mạng).");
     }
-    throw new VcServerError(res.status, message);
-  }
 
-  try {
-    return (await res.json()) as T;
-  } catch {
-    throw new VcServerError(res.status, "Phản hồi từ VC API không đúng định dạng JSON.");
+    if (!res.ok) {
+      if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_RETRIES) {
+        const delayMs = 500 * 2 ** attempt; // 500ms, 1s, 2s
+        console.error(`[vcServer] ${res.status} ${path} - thử lại sau ${delayMs}ms (lần ${attempt + 1}/${MAX_RETRIES})`);
+        await sleep(delayMs);
+        continue;
+      }
+
+      let message = res.statusText || `Lỗi ${res.status}`;
+      try {
+        const body = await res.json();
+        message = body?.error ?? message;
+      } catch {
+        // Body lỗi không phải JSON hợp lệ - giữ message mặc định.
+      }
+      throw new VcServerError(res.status, message);
+    }
+
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new VcServerError(res.status, "Phản hồi từ VC API không đúng định dạng JSON.");
+    }
   }
 }
 
