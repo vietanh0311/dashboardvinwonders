@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import ContentFilters from "@/components/ContentFilters";
 import ContentTable from "@/components/ContentTable";
 import DailyChart from "@/components/DailyChart";
 import DataSourceToggle from "@/components/DataSourceToggle";
@@ -16,9 +17,11 @@ import {
   VcApiError,
   computeMetrics,
   fetchContentsSmart,
+  filterContentItems,
   getStoredDataSource,
   vnDaysAgo,
   vnToday,
+  type ContentFilters as ContentFiltersValue,
   type DataSource,
   type DateRangeValue,
 } from "@/lib/api";
@@ -30,6 +33,7 @@ function defaultRange(): DateRangeValue {
 export default function DashboardPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [tokenSettingsOpen, setTokenSettingsOpen] = useState(false);
+  const [filters, setFilters] = useState<ContentFiltersValue>({});
 
   // Mặc định "supabase" cả lúc render server lẫn lần render đầu ở client để
   // tránh lệch hydration - đọc lựa chọn thật đã lưu (nếu có) ngay sau khi mount.
@@ -45,15 +49,16 @@ export default function DashboardPage() {
     { revalidateOnFocus: false }
   );
 
-  const metrics = useMemo(() => computeMetrics(data ?? []), [data]);
+  const filteredData = useMemo(() => filterContentItems(data ?? [], filters), [data, filters]);
+  const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);
 
   const today = vnToday();
   const videosToday = metrics.byDay.find((d) => d.date === today)?.videos ?? 0;
   const avgViewsPerVideo = metrics.totalVideos > 0 ? metrics.totalViews / metrics.totalVideos : 0;
 
   const latestContents = useMemo(
-    () => [...(data ?? [])].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1)).slice(0, 100),
-    [data]
+    () => [...filteredData].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1)).slice(0, 100),
+    [filteredData]
   );
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
@@ -96,6 +101,8 @@ export default function DashboardPage() {
         </header>
 
         <TokenSettings open={tokenSettingsOpen} onOpenChange={setTokenSettingsOpen} />
+
+        <ContentFilters items={data ?? []} value={filters} onChange={setFilters} />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

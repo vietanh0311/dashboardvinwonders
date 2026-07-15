@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import ContentFilters from "@/components/ContentFilters";
 import CreatorDrawer from "@/components/CreatorDrawer";
 import CreatorTable from "@/components/CreatorTable";
 import DataSourceToggle from "@/components/DataSourceToggle";
@@ -26,11 +27,13 @@ import {
   fetchContentsSmart,
   fetchCreatorProfilesFromSupabase,
   fetchUserProfiles,
+  filterContentItems,
   generateCreatorInsights,
   getStoredDataSource,
   resolveShortLinks,
   vnDaysAgo,
   vnToday,
+  type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
   type DataSource,
@@ -47,6 +50,7 @@ type ProfileProgress = { done: number; total: number };
 export default function CreatorsPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [tokenSettingsOpen, setTokenSettingsOpen] = useState(false);
+  const [filters, setFilters] = useState<ContentFiltersValue>({});
 
   // Mặc định "supabase" cả lúc render server lẫn lần render đầu ở client để
   // tránh lệch hydration - đọc lựa chọn thật đã lưu (nếu có) ngay sau khi mount.
@@ -98,8 +102,12 @@ export default function CreatorsPage() {
   const isValidating = current.isValidating || previous.isValidating;
   const error = current.error ?? previous.error;
 
-  const currentItems = useMemo(() => current.data ?? [], [current.data]);
-  const previousItems = useMemo(() => previous.data ?? [], [previous.data]);
+  const rawCurrentItems = useMemo(() => current.data ?? [], [current.data]);
+  const currentItems = useMemo(() => filterContentItems(rawCurrentItems, filters), [rawCurrentItems, filters]);
+  const previousItems = useMemo(
+    () => filterContentItems(previous.data ?? [], filters),
+    [previous.data, filters]
+  );
 
   const weeksInRange = countVnWeeksInRange(range.from, range.to);
 
@@ -252,6 +260,8 @@ export default function CreatorsPage() {
         </header>
 
         <TokenSettings open={tokenSettingsOpen} onOpenChange={setTokenSettingsOpen} />
+
+        <ContentFilters items={rawCurrentItems} value={filters} onChange={setFilters} />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

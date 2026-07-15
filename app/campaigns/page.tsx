@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import CampaignLifecycleChart from "@/components/CampaignLifecycleChart";
 import CampaignTable from "@/components/CampaignTable";
+import ContentFilters from "@/components/ContentFilters";
 import DataSourceToggle from "@/components/DataSourceToggle";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
@@ -25,10 +26,12 @@ import {
   computeViewDistribution,
   fetchContentsSmart,
   fetchEvents,
+  filterContentItems,
   generateCampaignInsights,
   getStoredDataSource,
   vnDaysAgo,
   vnToday,
+  type ContentFilters as ContentFiltersValue,
   type DataSource,
   type DateRangeValue,
 } from "@/lib/api";
@@ -43,6 +46,7 @@ export default function CampaignsPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [tokenSettingsOpen, setTokenSettingsOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState("");
+  const [filters, setFilters] = useState<ContentFiltersValue>({});
 
   // Mặc định "supabase" cả lúc render server lẫn lần render đầu ở client để
   // tránh lệch hydration - đọc lựa chọn thật đã lưu (nếu có) ngay sau khi mount.
@@ -69,7 +73,8 @@ export default function CampaignsPage() {
   const isValidating = content.isValidating;
   const error = content.error ?? eventsList.error;
 
-  const items = useMemo(() => content.data ?? [], [content.data]);
+  const rawItems = useMemo(() => content.data ?? [], [content.data]);
+  const items = useMemo(() => filterContentItems(rawItems, filters), [rawItems, filters]);
 
   const viewDist = useMemo(() => computeViewDistribution(items), [items]);
   const heatmap = useMemo(() => computePublishHeatmap(items), [items]);
@@ -134,6 +139,8 @@ export default function CampaignsPage() {
         </header>
 
         <TokenSettings open={tokenSettingsOpen} onOpenChange={setTokenSettingsOpen} />
+
+        <ContentFilters items={rawItems} value={filters} onChange={setFilters} />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
