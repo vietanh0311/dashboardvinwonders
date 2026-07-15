@@ -151,6 +151,31 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// PostgREST giới hạn mặc định 1000 dòng/response - query nào có thể vượt mốc
+// này (bảng videos/creators không giới hạn ngày) phải phân trang bằng .range()
+// và gộp lại, nếu không dữ liệu sẽ bị cắt cụt ở dòng thứ 1000.
+const SUPABASE_PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  let page = 0;
+
+  while (true) {
+    const from = page * SUPABASE_PAGE_SIZE;
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+    if (error) throw error;
+    const chunk = data ?? [];
+    rows.push(...chunk);
+    if (chunk.length < SUPABASE_PAGE_SIZE) break;
+    page += 1;
+  }
+
+  return rows;
+}
+
 // ---------------------------------------------------------------------------
 // Đọc dữ liệu (dùng bởi app/api/data/**)
 // ---------------------------------------------------------------------------
@@ -164,29 +189,28 @@ export async function fetchLatestVideosByPublishedRange(
   const fromAt = vnDayStartToUtcIso(fromDate);
   const toAt = vnDayEndToUtcIso(toDate);
 
-  let query = supabase
-    .from("videos")
-    .select("*")
-    .gte("published_at", fromAt)
-    .lte("published_at", toAt)
-    .order("snapshot_date", { ascending: true });
+  const rows = await fetchAllRows<VideoRow>((from, to) => {
+    let query = supabase
+      .from("videos")
+      .select("*")
+      .gte("published_at", fromAt)
+      .lte("published_at", toAt)
+      .order("snapshot_date", { ascending: true })
+      .range(from, to);
 
-  if (options.eventId) {
-    query = query.eq("event_id", options.eventId);
-  }
+    if (options.eventId) {
+      query = query.eq("event_id", options.eventId);
+    }
 
-  const { data, error } = await query;
+    return query;
+  });
 
-  if (error) throw error;
-  const rows = (data ?? []) as VideoRow[];
   return dedupeLatestPerContent(rows).map(videoRowToContentItem);
 }
 
 export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.from("creators").select("*");
-  if (error) throw error;
-  return (data ?? []) as CreatorRow[];
+  return fetchAllRows<CreatorRow>((from, to) => supabase.from("creators").select("*").range(from, to));
 }
 
 export async function fetchLatestSnapshotMeta(): Promise<{ snapshotDate: string; syncedAt: string } | null> {
@@ -314,14 +338,14 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
   const supabase = getSupabaseAdmin();
   const fromDate = vnDaysAgo(windowDays - 1);
 
-  const { data, error } = await supabase
-    .from("videos")
-    .select("*")
-    .gte("snapshot_date", fromDate)
-    .order("snapshot_date", { ascending: true });
-
-  if (error) throw error;
-  const rows = (data ?? []) as VideoRow[];
+  const rows = await fetchAllRows<VideoRow>((from, to) =>
+    supabase
+      .from("videos")
+      .select("*")
+      .gte("snapshot_date", fromDate)
+      .order("snapshot_date", { ascending: true })
+      .range(from, to)
+  );
 
   // --- velocity: delta views giữa 2 snapshot gần nhất của mỗi content_id ---
   const byContent = new Map<string, VideoRow[]>();
