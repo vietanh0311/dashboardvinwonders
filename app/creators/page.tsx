@@ -4,17 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
 import CreatorDrawer from "@/components/CreatorDrawer";
+import CreatorSearch from "@/components/CreatorSearch";
 import CreatorTable from "@/components/CreatorTable";
-import DataSourceToggle from "@/components/DataSourceToggle";
+import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
 import Nav from "@/components/Nav";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
-import SyncButton from "@/components/SyncButton";
-import TokenSettings from "@/components/TokenSettings";
 import {
-  VcApiError,
   addDaysToVnDate,
   classifyCreatorTiers,
   computeCreatorChannelsSummary,
@@ -29,14 +27,12 @@ import {
   fetchUserProfiles,
   filterContentItems,
   generateCreatorInsights,
-  getStoredDataSource,
   resolveShortLinks,
   vnDaysAgo,
   vnToday,
   type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
-  type DataSource,
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
@@ -49,16 +45,7 @@ type ProfileProgress = { done: number; total: number };
 
 export default function CreatorsPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [tokenSettingsOpen, setTokenSettingsOpen] = useState(false);
   const [filters, setFilters] = useState<ContentFiltersValue>({});
-
-  // Mặc định "supabase" cả lúc render server lẫn lần render đầu ở client để
-  // tránh lệch hydration - đọc lựa chọn thật đã lưu (nếu có) ngay sau khi mount.
-  const [dataSource, setDataSource] = useState<DataSource>("supabase");
-  useEffect(() => {
-    setDataSource(getStoredDataSource());
-  }, []);
-  const realtime = dataSource === "realtime";
 
   const [userProfiles, setUserProfiles] = useState<Map<string, UserDetail>>(new Map());
   const [channelVersion, setChannelVersion] = useState(0); // bump để buộc tính lại kênh sau khi resolve short-link
@@ -71,23 +58,20 @@ export default function CreatorsPage() {
   const [filterNoContract, setFilterNoContract] = useState(false);
   const [filterInactive30, setFilterInactive30] = useState(false);
 
-  const current = useSWR(["vc-contents-creators", range.from, range.to, dataSource], () =>
-    fetchContentsSmart(range.from, range.to, realtime)
+  const current = useSWR(["vc-contents-creators", range.from, range.to], () =>
+    fetchContentsSmart(range.from, range.to, false)
   );
 
   const previousFrom = addDaysToVnDate(range.from, -30);
   const previousTo = addDaysToVnDate(range.from, -1);
-  const previous = useSWR(["vc-contents-creators-prev", previousFrom, previousTo, dataSource], () =>
-    fetchContentsSmart(previousFrom, previousTo, realtime)
+  const previous = useSWR(["vc-contents-creators-prev", previousFrom, previousTo], () =>
+    fetchContentsSmart(previousFrom, previousTo, false)
   );
 
-  // Ở chế độ Supabase, tự nạp "cache mỏng" creators (email/phone/thành phố/kênh
-  // liên kết/hợp đồng) - nhanh, không cần token. Nút "Tải profile" (live, cần
-  // token) vẫn dùng được để lấy đầy đủ hơn (ngày sinh, banned, thống kê tiền...).
-  const supabaseCreators = useSWR(
-    dataSource === "supabase" ? "vc-creators-supabase" : null,
-    fetchCreatorProfilesFromSupabase
-  );
+  // Tự nạp "cache mỏng" creators (email/phone/thành phố/kênh liên kết/hợp
+  // đồng) - nhanh, không cần token. Nút "Tải profile" (live, cần token) vẫn
+  // dùng được để lấy đầy đủ hơn (ngày sinh, banned, thống kê tiền...).
+  const supabaseCreators = useSWR("vc-creators-supabase", fetchCreatorProfilesFromSupabase);
   useEffect(() => {
     if (!supabaseCreators.data) return;
     setUserProfiles((prev) => {
@@ -117,6 +101,11 @@ export default function CreatorsPage() {
     const stats = computeCreatorStats(currentItems);
     return classifyCreatorTiers(stats, currentItems, weeksInRange);
   }, [currentItems, weeksInRange]);
+
+  const knownCreatorIds = useMemo(
+    () => new Set(creatorsWithTier.map((c) => c.creatorId)),
+    [creatorsWithTier]
+  );
 
   const pareto = useMemo(() => computeParetoAnalysis(creatorsWithTier), [creatorsWithTier]);
 
@@ -175,7 +164,6 @@ export default function CreatorsPage() {
   }, [itemsByCreator, userProfiles, channelVersion]);
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
-  const is401 = realtime && error instanceof VcApiError && error.status === 401;
 
   const refresh = () => {
     current.mutate();
@@ -241,7 +229,6 @@ export default function CreatorsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <DateRangePicker value={range} onChange={setRange} />
-            <DataSourceToggle value={dataSource} onChange={setDataSource} />
             <button
               type="button"
               onClick={refresh}
@@ -250,43 +237,19 @@ export default function CreatorsPage() {
             >
               {isValidating ? "Đang tải..." : "Làm mới"}
             </button>
-            <SyncButton onSynced={refresh} />
-            <button
-              type="button"
-              onClick={() => setTokenSettingsOpen((v) => !v)}
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
-            >
-              Token API
-            </button>
           </div>
         </header>
 
-        <TokenSettings open={tokenSettingsOpen} onOpenChange={setTokenSettingsOpen} />
+        <DataUpdateBanner />
+
+        <CreatorSearch knownCreatorIds={knownCreatorIds} onSelectKnownCreator={setSelectedCreatorId} />
 
         <ContentFilters items={rawCurrentItems} value={filters} onChange={setFilters} />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {is401 ? (
-              <>
-                <strong>Token hết hạn, dán token mới.</strong> VC API từ chối yêu cầu (401) vì token thiếu hoặc đã hết
-                hạn. Bấm{" "}
-                <button
-                  type="button"
-                  onClick={() => setTokenSettingsOpen(true)}
-                  className="font-medium underline underline-offset-2"
-                >
-                  Token API
-                </button>{" "}
-                để dán token mới rồi bấm Làm mới.
-              </>
-            ) : (
-              <>
-                Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}.{" "}
-                {!realtime &&
-                  "Có thể Supabase chưa được cấu hình hoặc chưa có dữ liệu - bấm \"Cập nhật dữ liệu\" (cần token) hoặc bật Realtime."}
-              </>
-            )}
+            Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}. Có thể Supabase chưa
+            được cấu hình hoặc chưa có dữ liệu.
           </div>
         )}
 

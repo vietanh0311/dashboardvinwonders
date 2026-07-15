@@ -551,17 +551,25 @@ const USER_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 type UserCacheEntry = { data: UserDetail; fetchedAt: number };
 type UserCacheStore = Record<string, UserCacheEntry>;
 
+// Mirror trong bộ nhớ của USER_CACHE_KEY - tránh JSON.parse lại toàn bộ cache
+// từ localStorage mỗi lần gọi readUserCache() (cache chỉ đổi qua writeUserCache
+// trong cùng tab nên mirror luôn nhất quán với storage).
+let userCacheMirror: UserCacheStore | null = null;
+
 function readUserCache(): UserCacheStore {
+  if (userCacheMirror) return userCacheMirror;
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(USER_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as UserCacheStore) : {};
+    userCacheMirror = raw ? (JSON.parse(raw) as UserCacheStore) : {};
   } catch {
-    return {};
+    userCacheMirror = {};
   }
+  return userCacheMirror;
 }
 
 function writeUserCache(store: UserCacheStore) {
+  userCacheMirror = store;
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(store));
@@ -732,17 +740,26 @@ const LINK_CACHE_KEY = "vc-link-cache";
 type LinkCacheEntry = { username: string | null; finalUrl: string; resolvedAt: number };
 type LinkCacheStore = Record<string, LinkCacheEntry>; // key = content._id
 
+// Mirror trong bộ nhớ của LINK_CACHE_KEY. getResolvedChannel() gọi readLinkCache()
+// 1 lần/video (có thể hàng nghìn lần/render ở trang /creators) - nếu không có
+// mirror, mỗi lần gọi sẽ JSON.parse lại toàn bộ cache (cache "vĩnh viễn", chỉ
+// tăng theo thời gian) từ localStorage, rất tốn khi cache đã lớn.
+let linkCacheMirror: LinkCacheStore | null = null;
+
 function readLinkCache(): LinkCacheStore {
+  if (linkCacheMirror) return linkCacheMirror;
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(LINK_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as LinkCacheStore) : {};
+    linkCacheMirror = raw ? (JSON.parse(raw) as LinkCacheStore) : {};
   } catch {
-    return {};
+    linkCacheMirror = {};
   }
+  return linkCacheMirror;
 }
 
 function writeLinkCache(store: LinkCacheStore) {
+  linkCacheMirror = store;
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(LINK_CACHE_KEY, JSON.stringify(store));
@@ -1785,6 +1802,85 @@ export function generateCampaignInsights(
 }
 
 // ---------------------------------------------------------------------------
+// Insight tự động (rule-based) cho dashboard chính (trang /).
+// ---------------------------------------------------------------------------
+
+export function generateDashboardInsights(
+  metrics: ContentMetrics,
+  sourceComparison: SourceComparison[],
+  tagAnalysis: TagAnalysis[],
+  daysInRange: number
+): string[] {
+  const insights: string[] = [];
+
+  // 1. Video hôm nay so với trung bình ngày trong kỳ đang xem.
+  const today = vnToday();
+  const videosToday = metrics.byDay.find((d) => d.date === today)?.videos ?? 0;
+  const avgVideosPerDay = daysInRange > 0 ? metrics.totalVideos / daysInRange : 0;
+  if (avgVideosPerDay >= 1) {
+    const diffPct = ((videosToday - avgVideosPerDay) / avgVideosPerDay) * 100;
+    if (diffPct <= -30) {
+      insights.push(
+        `Hôm nay mới có ${formatNumber(videosToday)} video, thấp hơn ${formatPercent(
+          Math.abs(diffPct)
+        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ — nhắc creator đăng bài.`
+      );
+    } else if (diffPct >= 30) {
+      insights.push(
+        `Hôm nay có ${formatNumber(videosToday)} video, cao hơn ${formatPercent(
+          diffPct
+        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ.`
+      );
+    }
+  }
+
+  // 2. Nền tảng "lãng phí sức đăng": % video cao nhưng % views thấp hẳn.
+  const wasteful = sourceComparison.filter((s) => s.wastefulEffort).sort((a, b) => b.videoPct - a.videoPct)[0];
+  if (wasteful) {
+    insights.push(
+      `${SOURCE_LABEL[wasteful.source] ?? wasteful.source} chiếm ${formatPercent(
+        wasteful.videoPct
+      )} video nhưng chỉ ${formatPercent(wasteful.viewPct)} views — cân nhắc giảm ưu tiên nền tảng này.`
+    );
+  }
+
+  // 3. Event/sự kiện chiếm tỉ trọng quá lớn trong kỳ - rủi ro phụ thuộc 1 campaign.
+  const topEvent = metrics.byEvent[0];
+  if (topEvent && metrics.totalVideos > 0) {
+    const pct = (topEvent.videos / metrics.totalVideos) * 100;
+    if (pct > 50) {
+      insights.push(
+        `Sự kiện "${topEvent.name}" chiếm ${formatPercent(pct)} tổng video trong kỳ — rủi ro phụ thuộc vào 1 campaign.`
+      );
+    }
+  }
+
+  // 4. Tag tăng đột biến tuần này.
+  const anomalousTags = tagAnalysis.filter((t) => t.isAnomalous);
+  if (anomalousTags.length > 0) {
+    const names = anomalousTags
+      .slice(0, 3)
+      .map((t) => `"${t.name}"`)
+      .join(", ");
+    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này — cần kiểm tra nguyên nhân.`);
+  }
+
+  // 5. Trung bình video/creator thấp - phần lớn creator chỉ đăng 1 lần rồi không quay lại.
+  if (metrics.uniqueCreators > 0) {
+    const avgVideosPerCreator = metrics.totalVideos / metrics.uniqueCreators;
+    if (avgVideosPerCreator <= 1.5) {
+      insights.push(
+        `Trung bình mỗi creator chỉ đăng ${avgVideosPerCreator.toFixed(
+          1
+        )} video trong kỳ — phần lớn đăng 1 lần rồi không quay lại, cân nhắc chương trình giữ chân creator.`
+      );
+    }
+  }
+
+  return insights.slice(0, 5);
+}
+
+// ---------------------------------------------------------------------------
 // Nguồn dữ liệu: "supabase" (đọc lịch sử đã sync, nhanh, không cần token) hay
 // "realtime" (gọi thẳng VC API thật qua /api/vc/*, cần token). Lưu lựa chọn
 // vào localStorage để đồng nhất giữa các trang.
@@ -1878,6 +1974,25 @@ export async function fetchCreatorProfilesFromSupabase(): Promise<Map<string, Us
   const map = new Map<string, UserDetail>();
   Object.entries(res?.data ?? {}).forEach(([id, profile]) => map.set(id, profile));
   return map;
+}
+
+export type CreatorSearchMatch = {
+  creatorId: string;
+  name: string | null;
+  hashtag: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  tiktokUsername: string | null;
+  matchedFields: string[];
+  matchedVideos: { link: string; source: string | null; channelUsername: string | null }[];
+};
+
+// Search creator theo tên/hashtag/SĐT/link kênh/link video, không giới hạn
+// theo khoảng ngày đang xem trên dashboard - xem app/api/data/search/route.ts.
+export async function fetchCreatorSearch(query: string): Promise<CreatorSearchMatch[]> {
+  const res = await jsonFetch<{ data: CreatorSearchMatch[] }>(`/api/data/search?q=${encodeURIComponent(query)}`);
+  return res?.data ?? [];
 }
 
 export type LastSyncInfo = { snapshotDate: string; syncedAt: string };
