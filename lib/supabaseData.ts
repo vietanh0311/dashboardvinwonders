@@ -250,6 +250,119 @@ export async function fetchDistinctEvents(sinceDate: string): Promise<EventOptio
   return Array.from(map.entries()).map(([_id, name]) => ({ _id, name }));
 }
 
+// ---------------------------------------------------------------------------
+// Search creator theo tên/hashtag/SĐT (bảng creators) + link kênh/link video
+// (bảng videos) - không giới hạn theo khoảng ngày, dùng cho tính năng "tra
+// cứu creator" ở trang /creators. Chạy nhiều query ILIKE riêng theo cột (thay
+// vì gộp .or() 1 chuỗi) để tránh phải tự escape dấu phẩy/ngoặc mà PostgREST
+// dùng làm ký tự phân tách trong cú pháp .or().
+// ---------------------------------------------------------------------------
+
+export type CreatorSearchMatch = {
+  creatorId: string;
+  name: string | null;
+  hashtag: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  tiktokUsername: string | null;
+  matchedFields: string[];
+  matchedVideos: { link: string; source: string | null; channelUsername: string | null }[];
+};
+
+// Escape ký tự đại diện của ILIKE ('%', '_') để search 1 chuỗi đúng nghĩa đen -
+// nếu không, user gõ "%" sẽ vô tình khớp mọi dòng.
+function escapeIlikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+const SEARCH_MATCH_LIMIT = 30;
+
+export async function searchCreatorsAndVideos(query: string): Promise<CreatorSearchMatch[]> {
+  const supabase = getSupabaseAdmin();
+  const pattern = `%${escapeIlikePattern(query.trim())}%`;
+
+  const [byName, byHashtag, byPhone, byLink, byChannel] = await Promise.all([
+    supabase.from("creators").select("*").ilike("name", pattern).limit(SEARCH_MATCH_LIMIT),
+    supabase.from("creators").select("*").ilike("hashtag", pattern).limit(SEARCH_MATCH_LIMIT),
+    supabase.from("creators").select("*").ilike("phone", pattern).limit(SEARCH_MATCH_LIMIT),
+    supabase
+      .from("videos")
+      .select("creator_id, creator_name, link, source, channel_username")
+      .eq("is_latest", true)
+      .ilike("link", pattern)
+      .limit(SEARCH_MATCH_LIMIT),
+    supabase
+      .from("videos")
+      .select("creator_id, creator_name, link, source, channel_username")
+      .eq("is_latest", true)
+      .ilike("channel_username", pattern)
+      .limit(SEARCH_MATCH_LIMIT),
+  ]);
+
+  for (const res of [byName, byHashtag, byPhone, byLink, byChannel]) {
+    if (res.error) throw res.error;
+  }
+
+  const results = new Map<string, CreatorSearchMatch>();
+
+  function ensureEntry(creatorId: string, base: Partial<CreatorSearchMatch>): CreatorSearchMatch {
+    const existing = results.get(creatorId);
+    if (existing) return existing;
+    const entry: CreatorSearchMatch = {
+      creatorId,
+      name: base.name ?? null,
+      hashtag: base.hashtag ?? null,
+      phone: base.phone ?? null,
+      email: base.email ?? null,
+      city: base.city ?? null,
+      tiktokUsername: base.tiktokUsername ?? null,
+      matchedFields: [],
+      matchedVideos: [],
+    };
+    results.set(creatorId, entry);
+    return entry;
+  }
+
+  function addFieldMatch(row: CreatorRow, field: string) {
+    const entry = ensureEntry(row.creator_id, {
+      name: row.name,
+      hashtag: row.hashtag,
+      phone: row.phone,
+      email: row.email,
+      city: row.city,
+      tiktokUsername: row.tiktok_username,
+    });
+    if (!entry.matchedFields.includes(field)) entry.matchedFields.push(field);
+  }
+
+  (byName.data ?? []).forEach((row) => addFieldMatch(row as CreatorRow, "name"));
+  (byHashtag.data ?? []).forEach((row) => addFieldMatch(row as CreatorRow, "hashtag"));
+  (byPhone.data ?? []).forEach((row) => addFieldMatch(row as CreatorRow, "phone"));
+
+  type VideoMatchRow = {
+    creator_id: string | null;
+    creator_name: string | null;
+    link: string | null;
+    source: string | null;
+    channel_username: string | null;
+  };
+
+  function addVideoMatch(row: VideoMatchRow, field: string) {
+    if (!row.creator_id) return;
+    const entry = ensureEntry(row.creator_id, { name: row.creator_name });
+    if (!entry.matchedFields.includes(field)) entry.matchedFields.push(field);
+    if (entry.matchedVideos.length < 5 && row.link) {
+      entry.matchedVideos.push({ link: row.link, source: row.source, channelUsername: row.channel_username });
+    }
+  }
+
+  (byLink.data ?? []).forEach((row) => addVideoMatch(row as VideoMatchRow, "video_link"));
+  (byChannel.data ?? []).forEach((row) => addVideoMatch(row as VideoMatchRow, "channel_link"));
+
+  return Array.from(results.values());
+}
+
 export async function fetchLatestSnapshotMeta(): Promise<{ snapshotDate: string; syncedAt: string } | null> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase

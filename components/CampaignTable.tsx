@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency, formatNumber, formatPercent, type CampaignStat } from "@/lib/api";
+
+// Phân trang client-side để tránh render toàn bộ hàng đã sort vào DOM (giật
+// khi sort/lọc lại trên danh sách campaign lớn).
+const PAGE_SIZE = 50;
 
 type Props = {
   isLoading: boolean;
@@ -41,6 +45,7 @@ function getSortValue(row: CampaignStat, key: SortKey): string | number {
 export default function CampaignTable({ isLoading, data }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("cpv");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc"); // CPV thấp = hiệu quả nhất lên đầu
+  const [page, setPage] = useState(0);
 
   const sorted = useMemo(() => {
     const copy = [...data];
@@ -52,6 +57,13 @@ export default function CampaignTable({ isLoading, data }: Props) {
     });
     return copy;
   }, [data, sortKey, sortDir]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  useEffect(() => {
+    setPage(0);
+  }, [data, sortKey, sortDir]);
+
+  const paged = useMemo(() => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE), [sorted, page]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -95,7 +107,7 @@ export default function CampaignTable({ isLoading, data }: Props) {
               ))}
 
             {!isLoading &&
-              sorted.map((row) => (
+              paged.map((row) => (
                 <tr key={row.eventId} className="border-t border-gray-100">
                   <td className="py-2 pr-3 font-medium text-gray-800">{row.eventName}</td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.videos)}</td>
@@ -127,6 +139,35 @@ export default function CampaignTable({ isLoading, data }: Props) {
           </tbody>
         </table>
       </div>
+
+      {!isLoading && sorted.length > 0 && (
+        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <span>
+            {page * PAGE_SIZE + 1}–{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} campaign
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="rounded-md border border-gray-200 px-2 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              ← Trước
+            </button>
+            <span>
+              Trang {page + 1}/{pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={page >= pageCount - 1}
+              className="rounded-md border border-gray-200 px-2 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              Sau →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

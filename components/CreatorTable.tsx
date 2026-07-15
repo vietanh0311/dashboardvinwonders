@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CHANNEL_PLATFORM_LABEL,
   CREATOR_TIER_LABEL,
@@ -51,6 +51,11 @@ const COLUMNS: Column[] = [
 // Số cột "tĩnh" thêm sau các cột sortable ở trên (dùng cho colSpan skeleton/empty).
 const EXTRA_COLUMN_COUNT = 5;
 
+// Render toàn bộ hàng đã sort vào DOM (không phân trang) khiến bảng giật khi
+// sort/lọc lại trên danh sách lớn - phân trang client-side để giữ số hàng
+// render tại 1 thời điểm ở mức cố định.
+const PAGE_SIZE = 50;
+
 const TIER_BADGE: Record<CreatorTier, string> = {
   star: "bg-amber-50 text-amber-700",
   stable: "bg-emerald-50 text-emerald-700",
@@ -73,6 +78,7 @@ function NotLoadedCell() {
 export default function CreatorTable({ data, isLoading, profiles, channelSummaries, onSelectCreator }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("totalViews");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(0);
 
   const sorted = useMemo(() => {
     const copy = [...data];
@@ -84,6 +90,16 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
     });
     return copy;
   }, [data, sortKey, sortDir]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  useEffect(() => {
+    setPage(0);
+  }, [data, sortKey, sortDir]);
+
+  const paged = useMemo(
+    () => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [sorted, page]
+  );
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -136,7 +152,7 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
               ))}
 
             {!isLoading &&
-              sorted.map((row) => {
+              paged.map((row) => {
                 const profile = profiles.get(row.creatorId);
                 const channels = channelSummaries.get(row.creatorId);
                 return (
@@ -257,6 +273,35 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
           </tbody>
         </table>
       </div>
+
+      {!isLoading && sorted.length > 0 && (
+        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <span>
+            {page * PAGE_SIZE + 1}–{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} / {sorted.length} creator
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="rounded-md border border-gray-200 px-2 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              ← Trước
+            </button>
+            <span>
+              Trang {page + 1}/{pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={page >= pageCount - 1}
+              className="rounded-md border border-gray-200 px-2 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              Sau →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

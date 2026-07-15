@@ -1,28 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
 import ContentTable from "@/components/ContentTable";
 import DailyChart from "@/components/DailyChart";
-import DataSourceToggle from "@/components/DataSourceToggle";
+import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import EventTable from "@/components/EventTable";
+import InsightsPanel from "@/components/InsightsPanel";
 import KpiCards from "@/components/KpiCards";
 import Nav from "@/components/Nav";
-import SyncButton from "@/components/SyncButton";
 import TagTable from "@/components/TagTable";
-import TokenSettings from "@/components/TokenSettings";
 import {
-  VcApiError,
   computeMetrics,
+  computeSourceComparison,
+  computeTagAnalysis,
   fetchContentsSmart,
   filterContentItems,
-  getStoredDataSource,
+  generateDashboardInsights,
   vnDaysAgo,
   vnToday,
   type ContentFilters as ContentFiltersValue,
-  type DataSource,
   type DateRangeValue,
 } from "@/lib/api";
 
@@ -32,20 +31,11 @@ function defaultRange(): DateRangeValue {
 
 export default function DashboardPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [tokenSettingsOpen, setTokenSettingsOpen] = useState(false);
   const [filters, setFilters] = useState<ContentFiltersValue>({});
 
-  // Mặc định "supabase" cả lúc render server lẫn lần render đầu ở client để
-  // tránh lệch hydration - đọc lựa chọn thật đã lưu (nếu có) ngay sau khi mount.
-  const [dataSource, setDataSource] = useState<DataSource>("supabase");
-  useEffect(() => {
-    setDataSource(getStoredDataSource());
-  }, []);
-  const realtime = dataSource === "realtime";
-
   const { data, error, isValidating, mutate } = useSWR(
-    ["vc-contents", range.from, range.to, dataSource],
-    () => fetchContentsSmart(range.from, range.to, realtime),
+    ["vc-contents", range.from, range.to],
+    () => fetchContentsSmart(range.from, range.to, false),
     { revalidateOnFocus: false }
   );
   // !data thay vì SWR isLoading: với keepPreviousData bật ở SWRProvider, "data"
@@ -55,6 +45,19 @@ export default function DashboardPage() {
 
   const filteredData = useMemo(() => filterContentItems(data ?? [], filters), [data, filters]);
   const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);
+  const sourceComparison = useMemo(() => computeSourceComparison(filteredData), [filteredData]);
+  const tagAnalysis = useMemo(() => computeTagAnalysis(filteredData), [filteredData]);
+
+  const daysInRange = useMemo(() => {
+    const fromMs = new Date(`${range.from}T00:00:00Z`).getTime();
+    const toMs = new Date(`${range.to}T00:00:00Z`).getTime();
+    return Math.round((toMs - fromMs) / (24 * 60 * 60 * 1000)) + 1;
+  }, [range.from, range.to]);
+
+  const insights = useMemo(
+    () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, daysInRange),
+    [metrics, sourceComparison, tagAnalysis, daysInRange]
+  );
 
   const today = vnToday();
   const videosToday = metrics.byDay.find((d) => d.date === today)?.videos ?? 0;
@@ -66,8 +69,6 @@ export default function DashboardPage() {
   );
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
-  const is401 = realtime && error instanceof VcApiError && error.status === 401;
-
   return (
     <main className="min-h-screen bg-emerald-50/40">
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -84,7 +85,6 @@ export default function DashboardPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <DateRangePicker value={range} onChange={setRange} />
-            <DataSourceToggle value={dataSource} onChange={setDataSource} />
             <button
               type="button"
               onClick={() => mutate()}
@@ -93,44 +93,21 @@ export default function DashboardPage() {
             >
               {isValidating ? "Đang tải..." : "Làm mới"}
             </button>
-            <SyncButton onSynced={() => mutate()} />
-            <button
-              type="button"
-              onClick={() => setTokenSettingsOpen((v) => !v)}
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
-            >
-              Token API
-            </button>
           </div>
         </header>
 
-        <TokenSettings open={tokenSettingsOpen} onOpenChange={setTokenSettingsOpen} />
+        <DataUpdateBanner />
 
         <ContentFilters items={data ?? []} value={filters} onChange={setFilters} />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {is401 ? (
-              <>
-                <strong>Token hết hạn, dán token mới.</strong> VC API từ chối yêu cầu (401) vì token thiếu hoặc đã hết
-                hạn. Bấm{" "}
-                <button
-                  type="button"
-                  onClick={() => setTokenSettingsOpen(true)}
-                  className="font-medium underline underline-offset-2"
-                >
-                  Token API
-                </button>{" "}
-                để dán token mới rồi bấm Làm mới.
-              </>
-            ) : (
-              <>
-                Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}.{" "}
-                {!realtime && "Có thể Supabase chưa được cấu hình hoặc chưa có dữ liệu - bấm \"Cập nhật dữ liệu\" (cần token) hoặc bật Realtime."}
-              </>
-            )}
+            Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}. Có thể Supabase chưa
+            được cấu hình hoặc chưa có dữ liệu.
           </div>
         )}
+
+        <InsightsPanel isLoading={isLoading} insights={insights} />
 
         <KpiCards
           isLoading={isLoading}
