@@ -43,11 +43,15 @@ export default function DashboardPage() {
   }, []);
   const realtime = dataSource === "realtime";
 
-  const { data, error, isLoading, isValidating, mutate } = useSWR(
+  const { data, error, isValidating, mutate } = useSWR(
     ["vc-contents", range.from, range.to, dataSource],
     () => fetchContentsSmart(range.from, range.to, realtime),
     { revalidateOnFocus: false }
   );
+  // !data thay vì SWR isLoading: với keepPreviousData bật ở SWRProvider, "data"
+  // vẫn giữ kết quả của range trước trong lúc range mới đang tải - dùng !data
+  // để bảng/biểu đồ hiện dữ liệu cũ (mờ) thay vì skeleton trắng mỗi lần đổi filter.
+  const isLoading = !data;
 
   const filteredData = useMemo(() => filterContentItems(data ?? [], filters), [data, filters]);
   const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);

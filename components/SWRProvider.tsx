@@ -9,5 +9,7 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 // đảm bảo mọi useSWR trong app (trừ khi tự override refreshInterval) tự bắt
 // kịp dữ liệu mới sau tối đa 5 phút mà không cần reload tay.
 export default function SWRProvider({ children }: { children: React.ReactNode }) {
-  return <SWRConfig value={{ refreshInterval: REFRESH_INTERVAL_MS }}>{children}</SWRConfig>;
+  return (
+    <SWRConfig value={{ refreshInterval: REFRESH_INTERVAL_MS, keepPreviousData: true }}>{children}</SWRConfig>
+  );
 }

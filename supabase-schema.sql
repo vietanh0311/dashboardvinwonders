@@ -40,11 +40,20 @@ create table if not exists videos (
   points integer not null default 0,
   cash numeric not null default 0,
   status text,
+  -- true = dòng snapshot mới nhất của content_id này (duy nhất 1 dòng true/video,
+  -- do markLatestSnapshot() trong lib/supabaseData.ts duy trì sau mỗi lần sync).
+  -- Cho phép các trang đọc dữ liệu "hiện tại" lọc thẳng is_latest=true thay vì
+  -- phải tải toàn bộ lịch sử snapshot rồi dedupe ở JS (chậm dần khi khoảng ngày
+  -- filter càng dài vì video càng tích nhiều snapshot).
+  is_latest boolean not null default true,
   primary key (content_id, snapshot_date)
 );
 
 -- Truy vấn "video published trong khoảng ngày X" (dashboard chính, /creators, /campaigns).
 create index if not exists videos_published_at_idx on videos (published_at);
+-- Lọc "chỉ snapshot mới nhất" kết hợp với published_at ở trên - partial index vì
+-- is_latest=true chỉ chiếm ~1/N số dòng (N = số ngày video đã được sync).
+create index if not exists videos_is_latest_published_idx on videos (published_at) where is_latest;
 -- Truy vấn theo creator (bảng xếp hạng creator, drawer chi tiết).
 create index if not exists videos_creator_id_idx on videos (creator_id);
 -- Truy vấn theo campaign/event (bảng campaign).

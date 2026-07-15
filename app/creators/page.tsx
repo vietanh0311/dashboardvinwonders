@@ -98,7 +98,9 @@ export default function CreatorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseCreators.data]);
 
-  const isLoading = current.isLoading || previous.isLoading;
+  // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
+  // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
+  const isLoading = !current.data || !previous.data;
   const isValidating = current.isValidating || previous.isValidating;
   const error = current.error ?? previous.error;
 

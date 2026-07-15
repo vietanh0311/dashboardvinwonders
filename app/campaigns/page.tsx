@@ -71,7 +71,10 @@ export default function CampaignsPage() {
     () => fetchContentsSmart(lifecycleFrom, lifecycleTo, realtime, { event: selectedEventId })
   );
 
-  const isLoading = content.isLoading;
+  // !content.data thay vì content.isLoading: giữ dữ liệu range trước hiển thị
+  // (nhờ keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi
+  // filter/date range - chỉ true ở lần tải đầu tiên khi chưa có data nào.
+  const isLoading = !content.data;
   const isValidating = content.isValidating;
   const error = content.error ?? eventsList.error;
 
