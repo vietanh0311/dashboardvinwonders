@@ -25,7 +25,7 @@ import {
   computeTagAnalysis,
   computeViewDistribution,
   fetchContentsSmart,
-  fetchEvents,
+  fetchEventsSmart,
   filterContentItems,
   generateCampaignInsights,
   getStoredDataSource,
@@ -60,7 +60,9 @@ export default function CampaignsPage() {
     fetchContentsSmart(range.from, range.to, realtime)
   );
 
-  const eventsList = useSWR("vc-events-list", () => fetchEvents());
+  const eventsList = useSWR(["vc-events-list", dataSource], () =>
+    fetchEventsSmart(realtime, LIFECYCLE_LOOKBACK_DAYS + 1)
+  );
 
   const lifecycleFrom = vnDaysAgo(LIFECYCLE_LOOKBACK_DAYS);
   const lifecycleTo = vnToday();

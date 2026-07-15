@@ -213,6 +213,32 @@ export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
   return fetchAllRows<CreatorRow>((from, to) => supabase.from("creators").select("*").range(from, to));
 }
 
+export type EventOption = { _id: string; name: string };
+
+// Danh sách event cho dropdown (vd Campaign Lifecycle) - chỉ select 2 cột
+// event_id/event_name (nhẹ hơn nhiều so với select("*")) rồi dedupe ở JS, vì
+// PostgREST không hỗ trợ SELECT DISTINCT qua supabase-js. Thay cho việc gọi
+// thẳng /events của VC API thật (bị chặn 403 khi chạy trên Vercel).
+export async function fetchDistinctEvents(sinceDate: string): Promise<EventOption[]> {
+  const supabase = getSupabaseAdmin();
+  const fromAt = vnDayStartToUtcIso(sinceDate);
+
+  const rows = await fetchAllRows<{ event_id: string | null; event_name: string | null }>((from, to) =>
+    supabase
+      .from("videos")
+      .select("event_id, event_name")
+      .not("event_id", "is", null)
+      .gte("published_at", fromAt)
+      .range(from, to)
+  );
+
+  const map = new Map<string, string>();
+  rows.forEach((r) => {
+    if (r.event_id && !map.has(r.event_id)) map.set(r.event_id, r.event_name ?? r.event_id);
+  });
+  return Array.from(map.entries()).map(([_id, name]) => ({ _id, name }));
+}
+
 export async function fetchLatestSnapshotMeta(): Promise<{ snapshotDate: string; syncedAt: string } | null> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase

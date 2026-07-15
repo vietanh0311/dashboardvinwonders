@@ -1843,6 +1843,21 @@ export async function fetchContentsFromSupabase(
   return res?.data ?? [];
 }
 
+// Đọc danh sách event đã sync trong Supabase qua route nội bộ /api/data/events
+// - không cần token, dùng làm nguồn mặc định cho dropdown Campaign Lifecycle.
+export async function fetchEventsFromSupabase(days = 90): Promise<EventItem[]> {
+  const res = await jsonFetch<{ data: EventItem[] }>(`/api/data/events?days=${days}`);
+  return res?.data ?? [];
+}
+
+// Gộp 2 nguồn theo cờ realtime - dùng ở app/campaigns/page.tsx cho dropdown
+// event. Chế độ mặc định (Supabase) không bao giờ gọi thẳng VC API thật nên
+// không bị chặn 403 khi chạy trên Vercel.
+export async function fetchEventsSmart(realtime: boolean, days = 90): Promise<EventItem[]> {
+  if (realtime) return fetchEvents();
+  return fetchEventsFromSupabase(days);
+}
+
 // Gộp 2 nguồn theo cờ realtime - dùng ở app/page.tsx, /creators, /campaigns.
 export async function fetchContentsSmart(
   fromDate: string,
