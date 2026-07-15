@@ -10,6 +10,7 @@ import DateRangePicker from "@/components/DateRangePicker";
 import EventTable from "@/components/EventTable";
 import InsightsPanel from "@/components/InsightsPanel";
 import KpiCards from "@/components/KpiCards";
+import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
 import Nav from "@/components/Nav";
 import TagTable from "@/components/TagTable";
 import {
@@ -17,6 +18,7 @@ import {
   computeSourceComparison,
   computeTagAnalysis,
   fetchContentsSmart,
+  fetchLastSync,
   filterContentItems,
   generateDashboardInsights,
   vnDaysAgo,
@@ -43,6 +45,12 @@ export default function DashboardPage() {
   // để bảng/biểu đồ hiện dữ liệu cũ (mờ) thay vì skeleton trắng mỗi lần đổi filter.
   const isLoading = !data;
 
+  // Dashboard chỉ sync 1 lần/sáng nên "hôm nay" theo lịch (vnToday()) gần như luôn rỗng - dùng
+  // ngày sync gần nhất (đã có sẵn, cùng SWR key với DataUpdateBanner/LastSyncBadge nên không tốn
+  // thêm request) làm mốc "ngày gần nhất có dữ liệu" cho KPI card + insight.
+  const lastSync = useSWR(LAST_SYNC_SWR_KEY, fetchLastSync, { revalidateOnFocus: false });
+  const referenceDate = lastSync.data?.snapshotDate ?? vnToday();
+
   const filteredData = useMemo(() => filterContentItems(data ?? [], filters), [data, filters]);
   const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);
   const sourceComparison = useMemo(() => computeSourceComparison(filteredData), [filteredData]);
@@ -55,12 +63,11 @@ export default function DashboardPage() {
   }, [range.from, range.to]);
 
   const insights = useMemo(
-    () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, daysInRange),
-    [metrics, sourceComparison, tagAnalysis, daysInRange]
+    () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, daysInRange, filteredData, referenceDate),
+    [metrics, sourceComparison, tagAnalysis, daysInRange, filteredData, referenceDate]
   );
 
-  const today = vnToday();
-  const videosToday = metrics.byDay.find((d) => d.date === today)?.videos ?? 0;
+  const videosToday = metrics.byDay.find((d) => d.date === referenceDate)?.videos ?? 0;
   const avgViewsPerVideo = metrics.totalVideos > 0 ? metrics.totalViews / metrics.totalVideos : 0;
 
   const latestContents = useMemo(
@@ -115,6 +122,7 @@ export default function DashboardPage() {
           totalViews={metrics.totalViews}
           uniqueCreators={metrics.uniqueCreators}
           videosToday={videosToday}
+          referenceDate={referenceDate}
           avgViewsPerVideo={avgViewsPerVideo}
         />
 

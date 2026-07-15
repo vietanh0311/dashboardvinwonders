@@ -8,6 +8,9 @@ type Props = {
   totalViews: number;
   uniqueCreators: number;
   videosToday: number;
+  // Ngày sync gần nhất (yyyy-MM-dd) - dashboard chỉ sync 1 lần/sáng nên "hôm nay" thật ra là
+  // ngày dữ liệu đã có, không phải ngày lịch hiện tại.
+  referenceDate: string;
   avgViewsPerVideo: number;
 };
 
@@ -17,13 +20,21 @@ export default function KpiCards({
   totalViews,
   uniqueCreators,
   videosToday,
+  referenceDate,
   avgViewsPerVideo,
 }: Props) {
+  const [y, m, d] = referenceDate.split("-");
+  const referenceDateLabel = y && m && d ? `${d}/${m}` : referenceDate;
+
   const cards = [
     { label: "Tổng videos", value: formatNumber(totalVideos), hint: "Trong khoảng thời gian đã chọn" },
     { label: "Tổng views", value: formatNumber(totalViews), hint: "Tổng lượt xem" },
     { label: "Số creators", value: formatNumber(uniqueCreators), hint: "Creator có video (duy nhất)" },
-    { label: "Videos hôm nay", value: formatNumber(videosToday), hint: "Đăng trong ngày hôm nay (giờ VN)" },
+    {
+      label: `Videos ngày ${referenceDateLabel}`,
+      value: formatNumber(videosToday),
+      hint: "Ngày gần nhất có dữ liệu sync (giờ VN)",
+    },
     { label: "Views TB/video", value: formatNumber(avgViewsPerVideo), hint: "Trung bình lượt xem mỗi video" },
   ];
 
