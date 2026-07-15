@@ -13,13 +13,15 @@ import {
 } from "@/lib/supabaseData";
 import { fetchContentsRangeServer, fetchUserDetailServer } from "@/lib/vcServer";
 
-// Đồng bộ 3 ngày gần nhất từ VC API thật vào Supabase - stream tiến độ dạng
-// NDJSON (mỗi dòng 1 JSON object) để UI hiện progress bar theo từng bước
-// thay vì chỉ đợi 1 response duy nhất ở cuối.
+// Đồng bộ 90 ngày (3 tháng) gần nhất từ VC API thật vào Supabase - stream tiến
+// độ dạng NDJSON (mỗi dòng 1 JSON object) để UI hiện progress bar theo từng
+// bước thay vì chỉ đợi 1 response duy nhất ở cuối. Video/creator đã có sẵn
+// trong DB được bỏ qua ở bước resolve kênh/tải profile nên các lần sync sau
+// không bị chậm lại dù cửa sổ ngày dài.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const SYNC_WINDOW_DAYS = 3;
+const SYNC_WINDOW_DAYS = 90;
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get("x-vc-token");
