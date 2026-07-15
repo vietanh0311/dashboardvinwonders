@@ -3,8 +3,10 @@
 // dữ liệu" trên UI. Logic giống hệt app/api/sync/route.ts (dùng chung
 // lib/vcServer.ts + lib/supabaseData.ts) nên không cần chạy `npm run dev`.
 //
-// Dùng: npm run sync -- <vc-token>
-// (token hết hạn sau vài tiếng - lấy token mới mỗi lần chạy)
+// Dùng: npm run sync -- <vc-token> [số-ngày]
+// (token hết hạn sau vài tiếng - lấy token mới mỗi lần chạy; mặc định cào 90
+// ngày/3 tháng gần nhất - video/creator đã có sẵn trong DB được bỏ qua ở bước
+// resolve kênh/tải profile nên các lần chạy sau không bị chậm lại)
 
 import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type ContentItem } from "../lib/api";
 import { resolveTikTokLink } from "../lib/linkResolver";
@@ -19,14 +21,17 @@ import {
 } from "../lib/supabaseData";
 import { fetchContentsRangeServer, fetchUserDetailServer } from "../lib/vcServer";
 
-const SYNC_WINDOW_DAYS = 3;
+const DEFAULT_SYNC_WINDOW_DAYS = 90;
 
 async function main() {
   const token = process.argv[2] || process.env.VC_TOKEN;
   if (!token) {
-    console.error("Thiếu token. Dùng: npm run sync -- <vc-token>");
+    console.error("Thiếu token. Dùng: npm run sync -- <vc-token> [số-ngày]");
     process.exit(1);
   }
+
+  const daysArg = Number(process.argv[3]);
+  const SYNC_WINDOW_DAYS = Number.isFinite(daysArg) && daysArg > 0 ? daysArg : DEFAULT_SYNC_WINDOW_DAYS;
 
   const startedAt = Date.now();
   const snapshotDate = vnToday();
