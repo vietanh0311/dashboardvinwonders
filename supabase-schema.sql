@@ -69,9 +69,14 @@ create table if not exists creators (
   hashtag text,
   email text,
   phone text,
+  -- Trạng thái xác minh SĐT - chỉ có ở API live /users/<id>, cần chạy
+  -- `npm run sync -- <token> [days] --refresh-creators` để tải lại cho
+  -- creator đã có sẵn trong DB (mặc định sync chỉ tải creator mới).
+  phone_verified boolean,
   city text,
   tiktok_username text,
   contract_status text,
+  contract_name text,
   account_type text,
   last_activated_at timestamptz,
   updated_at timestamptz not null default now()
