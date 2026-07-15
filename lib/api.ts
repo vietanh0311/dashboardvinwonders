@@ -416,6 +416,71 @@ export async function fetchContentsRange(
 }
 
 // ---------------------------------------------------------------------------
+// Filter client-side trên danh sách content đã tải (nguồn/sự kiện/tag/nhóm cơ
+// sở) - áp dụng cho cả 2 data source (Supabase/Realtime) mà không cần thêm
+// request nào, vì options luôn được tách trực tiếp từ dữ liệu đã có trong tay.
+// ---------------------------------------------------------------------------
+
+export const SOURCE_LABEL: Record<ContentSource, string> = {
+  tiktok: "TikTok",
+  facebook_reels: "FB Reels",
+  instagram_reels: "IG Reels",
+  threads: "Threads",
+  youtube_shorts: "YT Shorts",
+};
+
+export type ContentFilters = {
+  source?: ContentSource;
+  eventName?: string;
+  tagName?: string;
+  workplaceUnit?: string;
+};
+
+export function filterContentItems(items: ContentItem[], filters: ContentFilters): ContentItem[] {
+  if (!filters.source && !filters.eventName && !filters.tagName && !filters.workplaceUnit) return items;
+
+  return items.filter((item) => {
+    if (filters.source && item.source !== filters.source) return false;
+    if (filters.eventName && item.event?.name !== filters.eventName) return false;
+    if (filters.tagName && !(item.warningTags ?? []).some((t) => t.name === filters.tagName)) return false;
+    if (filters.workplaceUnit && item.createdBy?.workplaceUnitName !== filters.workplaceUnit) return false;
+    return true;
+  });
+}
+
+export type ContentFilterOptions = {
+  sources: ContentSource[];
+  events: string[];
+  tags: string[];
+  units: string[];
+};
+
+// Tách option cho 4 dropdown filter từ chính danh sách content đã tải (không
+// gọi thêm request) - option luôn khớp với dữ liệu thật đang hiển thị.
+export function extractFilterOptions(items: ContentItem[]): ContentFilterOptions {
+  const sources = new Set<ContentSource>();
+  const events = new Set<string>();
+  const tags = new Set<string>();
+  const units = new Set<string>();
+
+  items.forEach((item) => {
+    if (item.source) sources.add(item.source);
+    if (item.event?.name) events.add(item.event.name);
+    (item.warningTags ?? []).forEach((t) => {
+      if (t?.name) tags.add(t.name);
+    });
+    if (item.createdBy?.workplaceUnitName) units.add(item.createdBy.workplaceUnitName);
+  });
+
+  return {
+    sources: Array.from(sources).sort(),
+    events: Array.from(events).sort(),
+    tags: Array.from(tags).sort(),
+    units: Array.from(units).sort(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Danh sách event / tag / partner cho dropdown filter
 // ---------------------------------------------------------------------------
 
