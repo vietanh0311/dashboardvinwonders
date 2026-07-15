@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import SearchableSelect from "@/components/SearchableSelect";
 import { SOURCE_LABEL, extractFilterOptions, type ContentFilters as ContentFiltersValue, type ContentItem } from "@/lib/api";
 
 type Props = {
@@ -35,44 +36,29 @@ export default function ContentFilters({ items, value, onChange }: Props) {
         ))}
       </select>
 
-      <select
-        className={selectClass}
-        value={value.eventName ?? ""}
-        onChange={(e) => onChange({ ...value, eventName: e.target.value || undefined })}
-      >
-        <option value="">Tất cả sự kiện</option>
-        {options.events.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        className="w-44"
+        value={value.eventName}
+        options={options.events}
+        placeholder="Tất cả sự kiện"
+        onChange={(eventName) => onChange({ ...value, eventName })}
+      />
 
-      <select
-        className={selectClass}
-        value={value.tagName ?? ""}
-        onChange={(e) => onChange({ ...value, tagName: e.target.value || undefined })}
-      >
-        <option value="">Tất cả tag</option>
-        {options.tags.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        className="w-40"
+        value={value.tagName}
+        options={options.tags}
+        placeholder="Tất cả tag"
+        onChange={(tagName) => onChange({ ...value, tagName })}
+      />
 
-      <select
-        className={selectClass}
-        value={value.workplaceUnit ?? ""}
-        onChange={(e) => onChange({ ...value, workplaceUnit: e.target.value || undefined })}
-      >
-        <option value="">Tất cả nhóm cơ sở</option>
-        {options.units.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        className="w-44"
+        value={value.workplaceUnit}
+        options={options.units}
+        placeholder="Tất cả nhóm cơ sở"
+        onChange={(workplaceUnit) => onChange({ ...value, workplaceUnit })}
+      />
 
       {hasActiveFilter && (
         <button

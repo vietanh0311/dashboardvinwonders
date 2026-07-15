@@ -6,6 +6,7 @@ import {
   contentItemToVideoRow,
   fetchExistingChannelMap,
   fetchExistingCreatorIds,
+  markLatestSnapshot,
   upsertCreatorRows,
   upsertSnapshotMeta,
   upsertVideoRows,
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest) {
           contentItemToVideoRow(item, snapshotDate, channelUsernameMap.get(item._id) ?? null)
         );
         await upsertVideoRows(videoRows);
+        await markLatestSnapshot(videoRows.map((r) => r.content_id), snapshotDate);
         await upsertCreatorRows(creatorRows);
         const { syncedAt } = await upsertSnapshotMeta(snapshotDate);
 

@@ -37,6 +37,7 @@ export type VideoRow = {
   points: number;
   cash: number;
   status: string | null;
+  is_latest: boolean;
 };
 
 export type CreatorRow = {
@@ -82,6 +83,7 @@ export function contentItemToVideoRow(
     points: item.statistic?.point?.total ?? 0,
     cash: item.statistic?.cash?.total ?? 0,
     status: item.status ?? null,
+    is_latest: true,
   };
 }
 
@@ -189,10 +191,15 @@ export async function fetchLatestVideosByPublishedRange(
   const fromAt = vnDayStartToUtcIso(fromDate);
   const toAt = vnDayEndToUtcIso(toDate);
 
+  // is_latest=true giới hạn kết quả về đúng 1 dòng/video (snapshot mới nhất) ngay
+  // ở Postgres, thay vì tải toàn bộ lịch sử snapshot của video đó rồi dedupe ở JS
+  // (mỗi video có 1 dòng/ngày kể từ lúc được sync - khoảng 30 ngày sẽ kéo theo rất
+  // nhiều dòng lịch sử dư thừa nếu không lọc trước). Xem markLatestSnapshot().
   const rows = await fetchAllRows<VideoRow>((from, to) => {
     let query = supabase
       .from("videos")
       .select("*")
+      .eq("is_latest", true)
       .gte("published_at", fromAt)
       .lte("published_at", toAt)
       .order("snapshot_date", { ascending: true })
@@ -205,6 +212,9 @@ export async function fetchLatestVideosByPublishedRange(
     return query;
   });
 
+  // Giữ dedupe làm lưới an toàn (vd dữ liệu sync trước khi có is_latest, hoặc
+  // rơi vào đúng lúc markLatestSnapshot() đang chạy dở) - trên dữ liệu đã lọc
+  // is_latest thì hầu như luôn no-op nên không tốn thêm chi phí đáng kể.
   return dedupeLatestPerContent(rows).map(videoRowToContentItem);
 }
 
@@ -227,6 +237,7 @@ export async function fetchDistinctEvents(sinceDate: string): Promise<EventOptio
     supabase
       .from("videos")
       .select("event_id, event_name")
+      .eq("is_latest", true)
       .not("event_id", "is", null)
       .gte("published_at", fromAt)
       .range(from, to)
@@ -299,6 +310,26 @@ export async function upsertVideoRows(rows: VideoRow[]): Promise<void> {
   const chunks = chunkArray(rows, 300);
   for (const chunk of chunks) {
     const { error } = await supabase.from("videos").upsert(chunk, { onConflict: "content_id,snapshot_date" });
+    if (error) throw error;
+  }
+}
+
+// Sau khi upsert snapshot của 1 lần sync (snapshotDate), đánh dấu is_latest=false
+// cho các dòng snapshot CŨ hơn của cùng content_id đó - để fetchLatestVideosByPublishedRange
+// chỉ cần lọc is_latest=true là ra đúng 1 dòng/video, không phải tải cả lịch sử
+// rồi dedupe ở JS. Gọi ngay sau upsertVideoRows() trong mỗi lần sync.
+export async function markLatestSnapshot(contentIds: string[], snapshotDate: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const chunks = chunkArray(Array.from(new Set(contentIds)), 400);
+
+  for (const chunk of chunks) {
+    if (chunk.length === 0) continue;
+    const { error } = await supabase
+      .from("videos")
+      .update({ is_latest: false })
+      .in("content_id", chunk)
+      .neq("snapshot_date", snapshotDate)
+      .eq("is_latest", true);
     if (error) throw error;
   }
 }
