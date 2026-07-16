@@ -36,6 +36,7 @@ import {
   filterContentItems,
   generateCreatorInsights,
   resolveShortLinks,
+  VcApiError,
   vnDaysAgo,
   vnToday,
   type ContentFilters as ContentFiltersValue,
@@ -44,6 +45,7 @@ import {
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
@@ -59,6 +61,7 @@ export default function CreatorsPage() {
   const [channelVersion, setChannelVersion] = useState(0); // bump để buộc tính lại kênh sau khi resolve short-link
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [profileProgress, setProfileProgress] = useState<ProfileProgress | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
 
@@ -201,6 +204,7 @@ export default function CreatorsPage() {
   const handleLoadProfiles = async () => {
     if (loadingProfiles || filteredCreators.length === 0) return;
     setLoadingProfiles(true);
+    setProfileError(null);
     try {
       const ids = Array.from(new Set(filteredCreators.map((c) => c.creatorId)));
       const idSet = new Set(ids);
@@ -228,6 +232,16 @@ export default function CreatorsPage() {
         onEach: (done) => setProfileProgress({ done: ids.length + done, total: totalSteps }),
       });
       setChannelVersion((v) => v + 1);
+    } catch (err) {
+      // fetchUserProfiles chỉ throw khi lỗi token (401/403) - các lỗi lẻ tẻ
+      // từng user đã được bỏ qua bên trong. Hiện message rõ thay vì fail im lặng.
+      if (err instanceof VcApiError && (err.status === 401 || err.status === 403)) {
+        setProfileError(
+          "Không tải được profile: token API thiếu hoặc hết hạn. Cần cập nhật VC_API_TOKEN trên server (liên hệ Việt Anh)."
+        );
+      } else {
+        setProfileError(getErrorMessage(err));
+      }
     } finally {
       setLoadingProfiles(false);
       setProfileProgress(null);
@@ -341,6 +355,12 @@ export default function CreatorsPage() {
             </button>
           </div>
         </div>
+
+        {profileError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {profileError}
+          </div>
+        )}
 
         <CreatorTable
           data={filteredCreators}

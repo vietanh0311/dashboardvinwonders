@@ -616,14 +616,25 @@ export async function fetchUserProfiles(
   let done = uniqueIds.length - toFetch.length;
   options.onEach?.(done, total);
 
+  // 401/403 nghĩa là token thiếu/hết hạn/không đủ quyền - lỗi này áp dụng cho
+  // MỌI request nên phải dừng cả pool và báo lên UI, thay vì nuốt im lặng từng
+  // request rồi kết thúc "thành công" với 0 profile (trước đây nút Tải profile
+  // fail toàn bộ mà không hiện gì).
+  let authError: VcApiError | null = null;
+
   await runWithConcurrency(toFetch, options.concurrency ?? 5, async (id) => {
+    if (authError) return; // đã xác định lỗi token - bỏ qua các id còn lại
     try {
       const profile = await fetchUserDetail(id);
       if (profile) {
         result.set(id, profile);
         cache[id] = { data: profile, fetchedAt: Date.now() };
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof VcApiError && (err.status === 401 || err.status === 403)) {
+        authError = authError ?? err;
+        return;
+      }
       // Bỏ qua user lỗi (vd đã bị xoá / API trả lỗi lẻ tẻ) - không chặn các
       // request khác trong pool.
     } finally {
@@ -633,6 +644,7 @@ export async function fetchUserProfiles(
   });
 
   writeUserCache(cache);
+  if (authError) throw authError;
   return result;
 }
 
