@@ -3,7 +3,6 @@
 // (đọc). Không import file này từ component "use client".
 
 import {
-  addDaysToVnDate,
   runWithConcurrency,
   vnDayEndToUtcIso,
   vnDayStartToUtcIso,
@@ -137,18 +136,6 @@ export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
     accountType: row.account_type ?? undefined,
     lastActivatedAt: row.last_activated_at ?? undefined,
   };
-}
-
-// Với 1 content_id có nhiều dòng (nhiều snapshot_date), chỉ giữ lại dòng có
-// snapshot_date lớn nhất (số liệu mới nhất) - dùng cho các trang đọc dữ liệu
-// "hiện tại" (dashboard/creators/campaigns ở chế độ Supabase).
-export function dedupeLatestPerContent(rows: VideoRow[]): VideoRow[] {
-  const sorted = [...rows].sort((a, b) =>
-    a.snapshot_date < b.snapshot_date ? -1 : a.snapshot_date > b.snapshot_date ? 1 : 0
-  );
-  const map = new Map<string, VideoRow>();
-  sorted.forEach((r) => map.set(r.content_id, r));
-  return Array.from(map.values());
 }
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
@@ -505,6 +492,33 @@ export async function upsertCreatorRows(rows: CreatorRow[]): Promise<void> {
   }
 }
 
+// Mỗi lần gọi videos_retention_cleanup chỉ xoá tối đa chừng này dòng để không
+// dính statement timeout của PostgREST - lặp đến khi DB báo hết dòng cần xoá.
+const RETENTION_DELETE_BATCH = 20000;
+
+// Dọn lịch sử snapshot cũ trong bảng videos (gọi cuối mỗi lần sync): giữ
+// snapshot theo NGÀY trong 14 ngày gần nhất, xa hơn chỉ giữ 1 snapshot/tuần
+// cho mỗi video; dòng is_latest=true không bao giờ bị xoá. Chính sách nằm
+// trong SQL function videos_retention_cleanup (xem supabase-schema.sql).
+// Trả về tổng số dòng đã xoá.
+export async function cleanupOldSnapshots(): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  let total = 0;
+
+  while (true) {
+    const { data, error } = await supabase.rpc("videos_retention_cleanup", {
+      keep_daily_days: 14,
+      max_delete: RETENTION_DELETE_BATCH,
+    });
+    if (error) throw error;
+    const deleted = Number(data ?? 0);
+    total += deleted;
+    if (deleted < RETENTION_DELETE_BATCH) break;
+  }
+
+  return total;
+}
+
 export async function upsertSnapshotMeta(snapshotDate: string): Promise<{ syncedAt: string }> {
   const supabase = getSupabaseAdmin();
   const syncedAt = new Date().toISOString();
@@ -552,117 +566,42 @@ export type TrendsResult = {
   dailyTotals: { date: string; views: number; videos: number }[];
 };
 
+// Toàn bộ tổng hợp (velocity, week-over-week, daily totals) chạy trong SQL
+// function videos_trends_json (xem supabase-schema.sql) - app chỉ nhận về jsonb
+// đã gọn (top 20 velocity + 2 dòng tuần + 1 dòng/ngày) thay vì kéo mọi dòng có
+// snapshot trong cửa sổ (74k+ dòng, tăng dần theo lần sync) về Node rồi mới tính.
 export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
   const supabase = getSupabaseAdmin();
   const fromDate = vnDaysAgo(windowDays - 1);
 
-  const rows = await fetchAllRows<VideoRow>((from, to) =>
-    supabase
-      .from("videos")
-      .select("*", { count: "exact" })
-      .gte("snapshot_date", fromDate)
-      // content_id làm tiebreaker: snapshot_date trùng nhau rất nhiều, order
-      // không ổn định làm phân trang song song lặp/sót dòng. Đi kèm index
-      // (snapshot_date, content_id) để mỗi trang không phải sort lại toàn bộ.
-      .order("snapshot_date", { ascending: true })
-      .order("content_id", { ascending: true })
-      .range(from, to)
-  );
+  const { data, error } = await supabase.rpc("videos_trends_json", { from_date: fromDate });
+  if (error) throw error;
 
-  // --- velocity: delta views giữa 2 snapshot gần nhất của mỗi content_id ---
-  const byContent = new Map<string, VideoRow[]>();
-  rows.forEach((r) => {
-    const arr = byContent.get(r.content_id) ?? [];
-    arr.push(r);
-    byContent.set(r.content_id, arr);
-  });
-
-  const velocity: VelocityItem[] = [];
-  byContent.forEach((snaps, contentId) => {
-    if (snaps.length < 2) return;
-    const sorted = [...snaps].sort((a, b) => (a.snapshot_date < b.snapshot_date ? -1 : 1));
-    const last = sorted[sorted.length - 1];
-    const prev = sorted[sorted.length - 2];
-    const deltaViews = (last.views ?? 0) - (prev.views ?? 0);
-    if (deltaViews <= 0) return;
-
-    const deltaHours = Math.max(
-      1,
-      (new Date(`${last.snapshot_date}T00:00:00Z`).getTime() -
-        new Date(`${prev.snapshot_date}T00:00:00Z`).getTime()) /
-        (60 * 60 * 1000)
-    );
-
-    velocity.push({
-      contentId,
-      title: last.title ?? "",
-      link: last.link ?? "",
-      source: last.source ?? "",
-      creatorName: last.creator_name ?? "-",
-      views: last.views ?? 0,
-      prevViews: prev.views ?? 0,
-      deltaViews,
-      deltaHours,
-      viewsPerHour: deltaViews / deltaHours,
-    });
-  });
-  velocity.sort((a, b) => b.deltaViews - a.deltaViews);
-
-  // --- week-over-week: dùng snapshot mới nhất mỗi content_id, nhóm theo published_at ---
-  const latestRows = dedupeLatestPerContent(rows);
-
-  // Dashboard chỉ sync 1 lần/sáng nên dữ liệu luôn trễ 1 ngày so với vnToday() thật - nếu neo
-  // "tuần này" vào vnToday(), ngày cuối cùng của khung sẽ luôn rỗng, khiến "tuần này" luôn thấp
-  // hơn "tuần trước" một cách giả tạo. Neo vào snapshot_date mới nhất thực tế có trong `rows`.
-  const anchorDate = rows.reduce((max, r) => (r.snapshot_date > max ? r.snapshot_date : max), fromDate);
-  const thisWeekFrom = addDaysToVnDate(anchorDate, -6);
-  const thisWeekTo = anchorDate;
-  const lastWeekFrom = addDaysToVnDate(anchorDate, -13);
-  const lastWeekTo = addDaysToVnDate(anchorDate, -7);
-
-  function metricsFor(from: string, to: string): PeriodMetrics {
-    const fromAt = vnDayStartToUtcIso(from);
-    const toAt = vnDayEndToUtcIso(to);
-    const inRange = latestRows.filter(
-      (r) => !!r.published_at && r.published_at >= fromAt && r.published_at <= toAt
-    );
-    const views = inRange.reduce((s, r) => s + (r.views ?? 0), 0);
-    const likes = inRange.reduce((s, r) => s + (r.likes ?? 0), 0);
-    const comments = inRange.reduce((s, r) => s + (r.comments ?? 0), 0);
-    const creators = new Set(inRange.map((r) => r.creator_id).filter((id): id is string => !!id)).size;
-    return {
-      from,
-      to,
-      videos: inRange.length,
-      views,
-      likes,
-      comments,
-      creators,
-      avgViewsPerVideo: inRange.length > 0 ? views / inRange.length : 0,
-    };
-  }
-
-  const weekOverWeek: WeekOverWeek = {
-    thisWeek: metricsFor(thisWeekFrom, thisWeekTo),
-    lastWeek: metricsFor(lastWeekFrom, lastWeekTo),
+  const result = (data ?? {}) as {
+    velocity?: VelocityItem[];
+    thisWeek?: PeriodMetrics;
+    lastWeek?: PeriodMetrics;
+    dailyTotals?: { date: string; views: number; videos: number }[];
   };
 
-  // --- tổng views/videos theo từng snapshot_date - chỉ mang tính tham khảo xu hướng ---
-  const byDate = new Map<string, { views: number; videos: number }>();
-  rows.forEach((r) => {
-    const entry = byDate.get(r.snapshot_date) ?? { views: 0, videos: 0 };
-    entry.views += r.views ?? 0;
-    entry.videos += 1;
-    byDate.set(r.snapshot_date, entry);
+  const emptyPeriod = (from: string, to: string): PeriodMetrics => ({
+    from,
+    to,
+    videos: 0,
+    views: 0,
+    likes: 0,
+    comments: 0,
+    creators: 0,
+    avgViewsPerVideo: 0,
   });
-  const dailyTotals = Array.from(byDate.entries())
-    .map(([date, v]) => ({ date, ...v }))
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return {
     windowDays,
-    velocity: velocity.slice(0, 20),
-    weekOverWeek,
-    dailyTotals,
+    velocity: result.velocity ?? [],
+    weekOverWeek: {
+      thisWeek: result.thisWeek ?? emptyPeriod(fromDate, fromDate),
+      lastWeek: result.lastWeek ?? emptyPeriod(fromDate, fromDate),
+    },
+    dailyTotals: result.dailyTotals ?? [],
   };
 }

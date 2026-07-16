@@ -17,6 +17,7 @@
 import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type ContentItem } from "../lib/api";
 import { resolveTikTokLink } from "../lib/linkResolver";
 import {
+  cleanupOldSnapshots,
   contentItemToVideoRow,
   fetchExistingChannelMap,
   fetchExistingCreatorIds,
@@ -132,6 +133,11 @@ async function main() {
   await markLatestSnapshot(videoRows.map((r) => r.content_id), snapshotDate);
   await upsertCreatorRows(creatorRows);
   const { syncedAt } = await upsertSnapshotMeta(snapshotDate);
+
+  // Dọn lịch sử snapshot cũ (giữ theo ngày 14 ngày gần nhất, xa hơn 1
+  // snapshot/tuần) - không dọn thì bảng videos phình ~1M dòng/tháng.
+  const deletedRows = await cleanupOldSnapshots();
+  if (deletedRows > 0) console.log(`Đã dọn ${deletedRows} dòng snapshot cũ.`);
 
   console.log("");
   console.log(

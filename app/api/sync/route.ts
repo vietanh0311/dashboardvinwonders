@@ -3,6 +3,7 @@ import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type Conten
 import { getErrorMessage } from "@/lib/errorMessage";
 import { resolveTikTokLink } from "@/lib/linkResolver";
 import {
+  cleanupOldSnapshots,
   contentItemToVideoRow,
   fetchExistingChannelMap,
   fetchExistingCreatorIds,
@@ -158,12 +159,18 @@ export async function POST(request: NextRequest) {
         await upsertCreatorRows(creatorRows);
         const { syncedAt } = await upsertSnapshotMeta(snapshotDate);
 
+        // Dọn lịch sử snapshot cũ (giữ theo ngày 14 ngày gần nhất, xa hơn 1
+        // snapshot/tuần) - không dọn thì bảng videos phình ~1M dòng/tháng.
+        send({ type: "stage", stage: "cleanup", message: "Đang dọn lịch sử snapshot cũ..." });
+        const deletedRows = await cleanupOldSnapshots();
+
         send({
           type: "done",
           summary: {
             totalVideosFetched: items.length,
             newVideos: newVideoIds.size,
             newCreators: creatorRows.length,
+            deletedSnapshotRows: deletedRows,
             durationMs: Date.now() - startedAt,
             snapshotDate,
             syncedAt,
