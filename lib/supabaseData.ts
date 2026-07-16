@@ -455,10 +455,22 @@ export async function fetchExistingCreatorIds(creatorIds: string[]): Promise<Set
   return result;
 }
 
+// fetchContentsRangeServer phân trang bằng offset trong lúc video mới vẫn có
+// thể được tạo ra giữa chừng, nên cùng 1 content_id đôi khi rơi vào 2 trang
+// liên tiếp. Nếu để lọt vào cùng 1 lệnh upsert, Postgres báo lỗi "ON CONFLICT
+// DO UPDATE command cannot affect row a second time" vì 2 dòng trùng khoá
+// xung đột (content_id, snapshot_date) - phải khử trùng trước khi upsert.
+function dedupeByKey<T>(rows: T[], keyOf: (row: T) => string): T[] {
+  const map = new Map<string, T>();
+  rows.forEach((row) => map.set(keyOf(row), row));
+  return Array.from(map.values());
+}
+
 export async function upsertVideoRows(rows: VideoRow[]): Promise<void> {
   if (rows.length === 0) return;
+  const deduped = dedupeByKey(rows, (r) => `${r.content_id}|${r.snapshot_date}`);
   const supabase = getSupabaseAdmin();
-  const chunks = chunkArray(rows, 300);
+  const chunks = chunkArray(deduped, 300);
   for (const chunk of chunks) {
     const { error } = await supabase.from("videos").upsert(chunk, { onConflict: "content_id,snapshot_date" });
     if (error) throw error;
@@ -487,8 +499,9 @@ export async function markLatestSnapshot(contentIds: string[], snapshotDate: str
 
 export async function upsertCreatorRows(rows: CreatorRow[]): Promise<void> {
   if (rows.length === 0) return;
+  const deduped = dedupeByKey(rows, (r) => r.creator_id);
   const supabase = getSupabaseAdmin();
-  const chunks = chunkArray(rows, 300);
+  const chunks = chunkArray(deduped, 300);
   for (const chunk of chunks) {
     const { error } = await supabase.from("creators").upsert(chunk, { onConflict: "creator_id" });
     if (error) throw error;

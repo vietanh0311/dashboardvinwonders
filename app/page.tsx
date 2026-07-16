@@ -56,15 +56,9 @@ export default function DashboardPage() {
   const sourceComparison = useMemo(() => computeSourceComparison(filteredData), [filteredData]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(filteredData), [filteredData]);
 
-  const daysInRange = useMemo(() => {
-    const fromMs = new Date(`${range.from}T00:00:00Z`).getTime();
-    const toMs = new Date(`${range.to}T00:00:00Z`).getTime();
-    return Math.round((toMs - fromMs) / (24 * 60 * 60 * 1000)) + 1;
-  }, [range.from, range.to]);
-
   const insights = useMemo(
-    () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, daysInRange, filteredData, referenceDate),
-    [metrics, sourceComparison, tagAnalysis, daysInRange, filteredData, referenceDate]
+    () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, filteredData),
+    [metrics, sourceComparison, tagAnalysis, filteredData]
   );
 
   const videosToday = metrics.byDay.find((d) => d.date === referenceDate)?.videos ?? 0;

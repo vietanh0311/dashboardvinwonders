@@ -44,7 +44,15 @@ export default function DateRangePicker({ value, onChange }: Props) {
             type="date"
             value={value.from}
             max={value.to}
-            onChange={(e) => onChange({ ...value, from: e.target.value })}
+            onChange={(e) => {
+              const from = e.target.value;
+              // Input type="date" chỉ gợi ý min/max qua UI - gõ tay hoặc dán vẫn có thể
+              // vượt giới hạn (không bắn onChange nếu rỗng do đang gõ dở). Tự kẹp lại để
+              // "Từ" không bao giờ vượt quá "Đến", tránh range đảo ngược (from > to) khiến
+              // query trả về rỗng mà không có cảnh báo gì.
+              if (!from) return;
+              onChange({ from, to: from > value.to ? from : value.to });
+            }}
             className="rounded-md border border-gray-200 px-2 py-1 text-gray-800 outline-none focus:border-emerald-400"
           />
         </label>
@@ -55,7 +63,12 @@ export default function DateRangePicker({ value, onChange }: Props) {
             value={value.to}
             min={value.from}
             max={vnToday()}
-            onChange={(e) => onChange({ ...value, to: e.target.value })}
+            onChange={(e) => {
+              let to = e.target.value;
+              if (!to) return;
+              if (to > vnToday()) to = vnToday();
+              onChange({ from: to < value.from ? to : value.from, to });
+            }}
             className="rounded-md border border-gray-200 px-2 py-1 text-gray-800 outline-none focus:border-emerald-400"
           />
         </label>
