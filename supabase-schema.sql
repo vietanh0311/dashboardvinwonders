@@ -62,6 +62,10 @@ create index if not exists videos_event_id_idx on videos (event_id);
 create index if not exists videos_content_id_snapshot_idx on videos (content_id, snapshot_date);
 -- Lấy toàn bộ dữ liệu 1 ngày sync (dùng khi dedupe "snapshot mới nhất mỗi video").
 create index if not exists videos_snapshot_date_idx on videos (snapshot_date);
+-- Phục vụ /trends: phân trang ORDER BY (snapshot_date, content_id) đi thẳng
+-- theo index, không phải sort lại toàn bộ dòng ở mỗi trang (dễ dính statement
+-- timeout khi bảng lớn dần theo số lần sync).
+create index if not exists videos_snapshot_content_idx on videos (snapshot_date, content_id);
 
 create table if not exists creators (
   creator_id text primary key,
@@ -81,6 +85,45 @@ create table if not exists creators (
   last_activated_at timestamptz,
   updated_at timestamptz not null default now()
 );
+
+-- Dedupe ngay tại DB: với mỗi content_id chỉ trả về dòng snapshot mới nhất
+-- trong các video published trong [from_at, to_at]. Lọc is_latest=true (đi
+-- partial index ở trên) là chính; DISTINCT ON làm lưới an toàn cho dữ liệu
+-- sync từ trước khi có is_latest hoặc đúng lúc markLatestSnapshot() chạy dở
+-- (khi đó 1 video có thể tạm có >1 dòng is_latest=true).
+create or replace function videos_latest_in_range(
+  from_at timestamptz,
+  to_at timestamptz,
+  p_event_id text default null
+)
+returns setof videos
+language sql
+stable
+as $$
+  select distinct on (content_id) *
+  from videos
+  where is_latest
+    and published_at >= from_at
+    and published_at <= to_at
+    and (p_event_id is null or event_id = p_event_id)
+  order by content_id, snapshot_date desc;
+$$;
+
+-- Wrapper trả jsonb thay vì setof: không dính giới hạn 1000 dòng/response của
+-- PostgREST nên app lấy trọn kết quả trong 1 request (thay vì phân trang mỗi
+-- trang re-chạy DISTINCT ON). Đây là function mà /api/data/contents gọi.
+create or replace function videos_latest_in_range_json(
+  from_at timestamptz,
+  to_at timestamptz,
+  p_event_id text default null
+)
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(jsonb_agg(v), '[]'::jsonb)
+  from videos_latest_in_range(from_at, to_at, p_event_id) v;
+$$;
 
 alter table snapshots enable row level security;
 alter table videos enable row level security;

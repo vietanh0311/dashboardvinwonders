@@ -4,6 +4,7 @@
 
 import {
   addDaysToVnDate,
+  runWithConcurrency,
   vnDayEndToUtcIso,
   vnDayStartToUtcIso,
   vnDaysAgo,
@@ -200,15 +201,17 @@ async function fetchAllRows<T>(
   const totalPages = Math.ceil(first.count / SUPABASE_PAGE_SIZE);
   const remainingPages = Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) => i + 1);
 
-  const restChunks = await Promise.all(
-    remainingPages.map(async (page) => {
-      const from = page * SUPABASE_PAGE_SIZE;
-      const to = from + SUPABASE_PAGE_SIZE - 1;
-      const { data, error } = await buildQuery(from, to);
-      if (error) throw error;
-      return data ?? [];
-    })
-  );
+  // Giới hạn 8 request đồng thời: bắn cả trăm trang cùng lúc (vd /trends kéo
+  // toàn bộ lịch sử snapshot) làm nghẽn CPU instance Supabase - từng đo được
+  // mỗi query từ ~1s phình lên 5-6s, thậm chí dính statement timeout.
+  const restChunks: T[][] = new Array(remainingPages.length);
+  await runWithConcurrency(remainingPages, 8, async (page) => {
+    const from = page * SUPABASE_PAGE_SIZE;
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+    if (error) throw error;
+    restChunks[page - 1] = data ?? [];
+  });
   restChunks.forEach((chunk) => rows.push(...chunk));
 
   return rows;
@@ -227,37 +230,29 @@ export async function fetchLatestVideosByPublishedRange(
   const fromAt = vnDayStartToUtcIso(fromDate);
   const toAt = vnDayEndToUtcIso(toDate);
 
-  // is_latest=true giới hạn kết quả về đúng 1 dòng/video (snapshot mới nhất) ngay
-  // ở Postgres, thay vì tải toàn bộ lịch sử snapshot của video đó rồi dedupe ở JS
-  // (mỗi video có 1 dòng/ngày kể từ lúc được sync - khoảng 30 ngày sẽ kéo theo rất
-  // nhiều dòng lịch sử dư thừa nếu không lọc trước). Xem markLatestSnapshot().
-  const rows = await fetchAllRows<VideoRow>((from, to) => {
-    let query = supabase
-      .from("videos")
-      .select("*", { count: "exact" })
-      .eq("is_latest", true)
-      .gte("published_at", fromAt)
-      .lte("published_at", toAt)
-      .order("snapshot_date", { ascending: true })
-      .range(from, to);
-
-    if (options.eventId) {
-      query = query.eq("event_id", options.eventId);
-    }
-
-    return query;
+  // Toàn bộ lọc + dedupe chạy trong 1 SQL function (videos_latest_in_range_json,
+  // xem supabase-schema.sql): lọc is_latest=true (partial index, xem
+  // markLatestSnapshot()) kèm DISTINCT ON content_id làm lưới an toàn cho dữ
+  // liệu sync trước khi có is_latest hoặc lúc markLatestSnapshot() chạy dở.
+  // Trả về jsonb nên không dính giới hạn 1000 dòng/response của PostgREST -
+  // 1 round-trip duy nhất lấy trọn kết quả thay vì phân trang nhiều trang.
+  const { data, error } = await supabase.rpc("videos_latest_in_range_json", {
+    from_at: fromAt,
+    to_at: toAt,
+    p_event_id: options.eventId ?? null,
   });
+  if (error) throw error;
 
-  // Giữ dedupe làm lưới an toàn (vd dữ liệu sync trước khi có is_latest, hoặc
-  // rơi vào đúng lúc markLatestSnapshot() đang chạy dở) - trên dữ liệu đã lọc
-  // is_latest thì hầu như luôn no-op nên không tốn thêm chi phí đáng kể.
-  return dedupeLatestPerContent(rows).map(videoRowToContentItem);
+  return ((data ?? []) as VideoRow[]).map(videoRowToContentItem);
 }
 
 export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
   const supabase = getSupabaseAdmin();
+  // order theo khóa chính để thứ tự ổn định giữa các trang tải song song -
+  // không có ORDER BY, Postgres không đảm bảo thứ tự nên phân trang có thể
+  // lặp/sót dòng.
   return fetchAllRows<CreatorRow>((from, to) =>
-    supabase.from("creators").select("*", { count: "exact" }).range(from, to)
+    supabase.from("creators").select("*", { count: "exact" }).order("creator_id").range(from, to)
   );
 }
 
@@ -278,6 +273,8 @@ export async function fetchDistinctEvents(sinceDate: string): Promise<EventOptio
       .eq("is_latest", true)
       .not("event_id", "is", null)
       .gte("published_at", fromAt)
+      // Thứ tự ổn định cho phân trang song song (xem fetchAllRows).
+      .order("content_id")
       .range(from, to)
   );
 
@@ -564,7 +561,11 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
       .from("videos")
       .select("*", { count: "exact" })
       .gte("snapshot_date", fromDate)
+      // content_id làm tiebreaker: snapshot_date trùng nhau rất nhiều, order
+      // không ổn định làm phân trang song song lặp/sót dòng. Đi kèm index
+      // (snapshot_date, content_id) để mỗi trang không phải sort lại toàn bộ.
       .order("snapshot_date", { ascending: true })
+      .order("content_id", { ascending: true })
       .range(from, to)
   );
 
