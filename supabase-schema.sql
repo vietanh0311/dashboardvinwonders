@@ -5,7 +5,9 @@
 --                chạy lại nhiều lần cùng ngày).
 --   videos     - lịch sử số liệu video theo từng ngày sync (snapshot_date), khóa chính
 --                (content_id, snapshot_date) -> mỗi video có nhiều dòng theo thời gian, dùng để
---                tính view velocity / so sánh tuần ở trang /trends.
+--                tính view velocity / so sánh tuần ở trang /trends. Lịch sử KHÔNG giữ mãi:
+--                videos_retention_cleanup (gọi cuối mỗi lần sync) giữ snapshot theo ngày trong
+--                14 ngày gần nhất, xa hơn chỉ giữ 1 snapshot/tuần cho mỗi video.
 --   creators   - thông tin creator dạng "cache mỏng" (không đầy đủ như /users/<id> thật, chỉ đủ
 --                hiển thị nhanh trên bảng mà không cần token) - được cập nhật khi phát hiện
 --                creator mới trong lúc sync.
@@ -123,6 +125,174 @@ stable
 as $$
   select coalesce(jsonb_agg(v), '[]'::jsonb)
   from videos_latest_in_range(from_at, to_at, p_event_id) v;
+$$;
+
+-- Retention cho lịch sử snapshot: bảng videos chèn ~1 dòng/video/lần sync (cửa
+-- sổ 90 ngày ~ 36k dòng/lần) nên sẽ phình ~1M dòng/tháng nếu sync hằng ngày.
+-- Giữ snapshot theo NGÀY trong keep_daily_days gần nhất (đủ cho velocity/so
+-- sánh tuần ở /trends); xa hơn chỉ giữ 1 snapshot/TUẦN (dòng có snapshot_date
+-- lớn nhất trong mỗi ISO week) cho mỗi video. Dòng is_latest=true không bao
+-- giờ bị xoá (dashboard/creators/campaigns đọc dữ liệu "hiện tại" từ đó, kể
+-- cả khi video đã rời cửa sổ sync). Xoá tối đa max_delete dòng/lần gọi để
+-- không dính statement timeout của PostgREST - cleanupOldSnapshots() trong
+-- lib/supabaseData.ts (chạy cuối mỗi lần sync) gọi lặp đến khi hết dòng cần xoá.
+create or replace function videos_retention_cleanup(
+  keep_daily_days int default 14,
+  max_delete int default 20000
+)
+returns bigint
+language sql
+volatile
+as $$
+  with candidates as (
+    select content_id, snapshot_date
+    from (
+      select content_id, snapshot_date, is_latest,
+             row_number() over (
+               partition by content_id, date_trunc('week', snapshot_date)
+               order by snapshot_date desc
+             ) as rn
+      from videos
+      where snapshot_date < (now() at time zone 'Asia/Ho_Chi_Minh')::date - keep_daily_days
+    ) ranked
+    where rn > 1 and not is_latest
+    limit max_delete
+  ),
+  deleted as (
+    delete from videos v
+    using candidates c
+    where v.content_id = c.content_id
+      and v.snapshot_date = c.snapshot_date
+    returning 1
+  )
+  select count(*) from deleted;
+$$;
+
+-- Toàn bộ tính toán của /trends chạy trong DB, trả jsonb đã tổng hợp (vài
+-- trăm dòng) thay vì app kéo mọi dòng có snapshot trong cửa sổ (74k+ dòng,
+-- tăng dần theo lần sync) về Node. Gồm 3 phần, giữ nguyên logic của
+-- computeTrends cũ (lib/supabaseData.ts):
+--   velocity    - delta views giữa 2 snapshot gần nhất của mỗi content_id
+--                 (lead() theo snapshot_date desc), chỉ lấy delta > 0, top 20.
+--   thisWeek/lastWeek - metrics theo published_at trên dòng is_latest=true (đi
+--                 partial index videos_is_latest_published_idx). Neo "tuần này"
+--                 vào snapshot_date mới nhất thực tế (không phải hôm nay) vì
+--                 sync 1 lần/sáng -> dữ liệu luôn trễ 1 ngày, neo vào hôm nay
+--                 sẽ làm "tuần này" thấp hơn "tuần trước" một cách giả tạo.
+--                 Ranh giới ngày quy đổi theo múi giờ VN như vnDayStartToUtcIso.
+--   dailyTotals - tổng views + số dòng theo từng snapshot_date trong cửa sổ.
+create or replace function videos_trends_json(from_date date)
+returns jsonb
+language sql
+stable
+as $$
+  with win as (
+    select content_id, snapshot_date, title, link, source, creator_name, views,
+           row_number() over w as rn,
+           lead(views) over w as prev_views,
+           lead(snapshot_date) over w as prev_date
+    from videos
+    where snapshot_date >= from_date
+    window w as (partition by content_id order by snapshot_date desc)
+  ),
+  velocity as (
+    select content_id, title, link, source, creator_name,
+           views, prev_views, prev_date, snapshot_date,
+           views - prev_views as delta_views,
+           greatest(1, (snapshot_date - prev_date) * 24) as delta_hours
+    from win
+    where rn = 1
+      and prev_views is not null
+      and views - prev_views > 0
+    order by views - prev_views desc
+    limit 20
+  ),
+  anchor as (
+    select coalesce(max(snapshot_date), from_date) as d
+    from videos
+    where snapshot_date >= from_date
+  ),
+  bounds as (
+    select a.d - 6  as tw_from_d, a.d      as tw_to_d,
+           a.d - 13 as lw_from_d, a.d - 7  as lw_to_d,
+           ((a.d - 13)::timestamp at time zone 'Asia/Ho_Chi_Minh') as lw_from_at,
+           ((a.d - 6)::timestamp  at time zone 'Asia/Ho_Chi_Minh') as tw_from_at,
+           ((a.d + 1)::timestamp  at time zone 'Asia/Ho_Chi_Minh') as tw_end_excl
+    from anchor a
+  ),
+  week_rows as (
+    select v.published_at >= b.tw_from_at as in_this_week,
+           v.views, v.likes, v.comments, v.creator_id
+    from videos v, bounds b
+    where v.is_latest
+      and v.published_at >= b.lw_from_at
+      and v.published_at < b.tw_end_excl
+  ),
+  wow as (
+    select count(*)                 filter (where in_this_week)     as tw_videos,
+           coalesce(sum(views)      filter (where in_this_week), 0) as tw_views,
+           coalesce(sum(likes)      filter (where in_this_week), 0) as tw_likes,
+           coalesce(sum(comments)   filter (where in_this_week), 0) as tw_comments,
+           count(distinct creator_id) filter (where in_this_week)     as tw_creators,
+           count(*)                 filter (where not in_this_week)     as lw_videos,
+           coalesce(sum(views)      filter (where not in_this_week), 0) as lw_views,
+           coalesce(sum(likes)      filter (where not in_this_week), 0) as lw_likes,
+           coalesce(sum(comments)   filter (where not in_this_week), 0) as lw_comments,
+           count(distinct creator_id) filter (where not in_this_week)   as lw_creators
+    from week_rows
+  ),
+  daily as (
+    select snapshot_date, sum(views) as views, count(*) as videos
+    from videos
+    where snapshot_date >= from_date
+    group by snapshot_date
+  )
+  select jsonb_build_object(
+    'velocity', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'contentId', content_id,
+        'title', coalesce(title, ''),
+        'link', coalesce(link, ''),
+        'source', coalesce(source, ''),
+        'creatorName', coalesce(creator_name, '-'),
+        'views', views,
+        'prevViews', prev_views,
+        'deltaViews', delta_views,
+        'deltaHours', delta_hours,
+        'viewsPerHour', delta_views::float / delta_hours
+      ) order by delta_views desc), '[]'::jsonb)
+      from velocity
+    ),
+    'thisWeek', jsonb_build_object(
+      'from', to_char(b.tw_from_d, 'YYYY-MM-DD'),
+      'to', to_char(b.tw_to_d, 'YYYY-MM-DD'),
+      'videos', w.tw_videos,
+      'views', w.tw_views,
+      'likes', w.tw_likes,
+      'comments', w.tw_comments,
+      'creators', w.tw_creators,
+      'avgViewsPerVideo', case when w.tw_videos > 0 then w.tw_views::float / w.tw_videos else 0 end
+    ),
+    'lastWeek', jsonb_build_object(
+      'from', to_char(b.lw_from_d, 'YYYY-MM-DD'),
+      'to', to_char(b.lw_to_d, 'YYYY-MM-DD'),
+      'videos', w.lw_videos,
+      'views', w.lw_views,
+      'likes', w.lw_likes,
+      'comments', w.lw_comments,
+      'creators', w.lw_creators,
+      'avgViewsPerVideo', case when w.lw_videos > 0 then w.lw_views::float / w.lw_videos else 0 end
+    ),
+    'dailyTotals', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'date', to_char(snapshot_date, 'YYYY-MM-DD'),
+        'views', views,
+        'videos', videos
+      ) order by snapshot_date), '[]'::jsonb)
+      from daily
+    )
+  )
+  from bounds b, wow w;
 $$;
 
 alter table snapshots enable row level security;
