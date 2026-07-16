@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
+import CpvRankingPanel from "@/components/CpvRankingPanel";
 import CreatorDrawer from "@/components/CreatorDrawer";
 import CreatorSearch from "@/components/CreatorSearch";
 import CreatorTable from "@/components/CreatorTable";
@@ -12,13 +13,18 @@ import InsightsPanel from "@/components/InsightsPanel";
 import Nav from "@/components/Nav";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
+import TierBreakdownTable from "@/components/TierBreakdownTable";
+import UnitComparisonTable from "@/components/UnitComparisonTable";
 import {
   addDaysToVnDate,
   classifyCreatorTiers,
+  computeCpvRanking,
   computeCreatorChannelsSummary,
   computeCreatorStats,
   computeNewVsReturning,
   computeParetoAnalysis,
+  computeTierBreakdown,
+  computeUnitComparison,
   countVnWeeksInRange,
   daysSince,
   extractChannelSync,
@@ -113,6 +119,15 @@ export default function CreatorsPage() {
     () => computeNewVsReturning(currentItems, previousItems),
     [currentItems, previousItems]
   );
+
+  const tierBreakdown = useMemo(
+    () => computeTierBreakdown(creatorsWithTier, previousItems),
+    [creatorsWithTier, previousItems]
+  );
+
+  const unitComparison = useMemo(() => computeUnitComparison(creatorsWithTier), [creatorsWithTier]);
+
+  const cpvRanking = useMemo(() => computeCpvRanking(creatorsWithTier), [creatorsWithTier]);
 
   const insights = useMemo(
     () => generateCreatorInsights(creatorsWithTier, pareto, weeklyTrend, range.to),
@@ -334,6 +349,13 @@ export default function CreatorsPage() {
           <ParetoChart isLoading={isLoading} pareto={pareto} />
           <NewReturningChart isLoading={isLoading} data={weeklyTrend} />
         </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <TierBreakdownTable isLoading={isLoading} data={tierBreakdown} />
+          <UnitComparisonTable isLoading={isLoading} data={unitComparison} />
+        </div>
+
+        <CpvRankingPanel isLoading={isLoading} data={cpvRanking} onSelectCreator={setSelectedCreatorId} />
       </div>
 
       {selectedCreator && (

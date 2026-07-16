@@ -1287,6 +1287,124 @@ export function computeNewVsReturning(
 }
 
 // ---------------------------------------------------------------------------
+// Phân bổ creator theo tier: bao nhiêu creator/% views mỗi tier, và trong đó
+// bao nhiêu % đã hoạt động ở kỳ 30 ngày trước (previousWindowItems) - đo mức
+// độ giữ chân theo từng nhóm thay vì chỉ 1 số tổng như NewReturningChart.
+// ---------------------------------------------------------------------------
+
+export type TierBreakdownRow = {
+  tier: CreatorTier;
+  label: string;
+  creators: number;
+  creatorsPct: number;
+  totalViews: number;
+  viewsPct: number;
+  avgViewsPerVideo: number;
+  returningCreators: number;
+  retentionPct: number;
+};
+
+const TIER_ORDER: CreatorTier[] = ["star", "stable", "one_hit", "needs_activation", "unclassified"];
+
+export function computeTierBreakdown(
+  creators: CreatorWithTier[],
+  previousWindowItems: ContentItem[]
+): TierBreakdownRow[] {
+  const seenBefore = new Set<string>();
+  previousWindowItems.forEach((it) => {
+    if (it.createdBy?._id) seenBefore.add(it.createdBy._id);
+  });
+
+  const totalCreators = creators.length;
+  const totalViews = creators.reduce((sum, c) => sum + c.totalViews, 0);
+
+  return TIER_ORDER.map((tier) => {
+    const inTier = creators.filter((c) => c.tier === tier);
+    const tierViews = inTier.reduce((sum, c) => sum + c.totalViews, 0);
+    const tierVideos = inTier.reduce((sum, c) => sum + c.videos, 0);
+    const returningCreators = inTier.filter((c) => seenBefore.has(c.creatorId)).length;
+
+    return {
+      tier,
+      label: CREATOR_TIER_LABEL[tier],
+      creators: inTier.length,
+      creatorsPct: totalCreators > 0 ? (inTier.length / totalCreators) * 100 : 0,
+      totalViews: tierViews,
+      viewsPct: totalViews > 0 ? (tierViews / totalViews) * 100 : 0,
+      avgViewsPerVideo: tierVideos > 0 ? tierViews / tierVideos : 0,
+      returningCreators,
+      retentionPct: inTier.length > 0 ? (returningCreators / inTier.length) * 100 : 0,
+    };
+  }).filter((row) => row.creators > 0);
+}
+
+// ---------------------------------------------------------------------------
+// So sánh hiệu quả giữa các nhóm cơ sở (workplaceUnitName): views TB/video,
+// CPV (chi phí/view) - phát hiện cơ sở nào đang làm tốt/kém hơn hẳn.
+// ---------------------------------------------------------------------------
+
+export type UnitComparisonRow = {
+  unitName: string;
+  creators: number;
+  videos: number;
+  totalViews: number;
+  avgViewsPerVideo: number;
+  totalCash: number;
+  cpv: number;
+};
+
+export function computeUnitComparison(creators: CreatorStat[]): UnitComparisonRow[] {
+  const byUnit = new Map<
+    string,
+    { creators: number; videos: number; totalViews: number; totalCash: number }
+  >();
+
+  creators.forEach((c) => {
+    const key = c.workplaceUnitName || "Không rõ";
+    const entry = byUnit.get(key) ?? { creators: 0, videos: 0, totalViews: 0, totalCash: 0 };
+    entry.creators += 1;
+    entry.videos += c.videos;
+    entry.totalViews += c.totalViews;
+    entry.totalCash += c.totalCash;
+    byUnit.set(key, entry);
+  });
+
+  return Array.from(byUnit.entries())
+    .map(([unitName, v]) => ({
+      unitName,
+      creators: v.creators,
+      videos: v.videos,
+      totalViews: v.totalViews,
+      avgViewsPerVideo: v.videos > 0 ? v.totalViews / v.videos : 0,
+      totalCash: v.totalCash,
+      cpv: v.totalViews > 0 ? v.totalCash / v.totalViews : 0,
+    }))
+    .sort((a, b) => b.totalViews - a.totalViews);
+}
+
+// ---------------------------------------------------------------------------
+// Xếp hạng creator theo CPV (chi phí/view) - ai đang chi hiệu quả nhất/kém
+// nhất. Chỉ xét creator có cash & đủ views để tránh nhiễu do mẫu quá nhỏ.
+// ---------------------------------------------------------------------------
+
+const CPV_RANKING_MIN_VIEWS = 500;
+
+export type CpvRanking = {
+  mostEfficient: CreatorWithTier[];
+  leastEfficient: CreatorWithTier[];
+};
+
+export function computeCpvRanking(creators: CreatorWithTier[], limit = 5): CpvRanking {
+  const eligible = creators.filter((c) => c.totalCash > 0 && c.totalViews >= CPV_RANKING_MIN_VIEWS);
+  const sorted = [...eligible].sort((a, b) => a.cpv - b.cpv);
+
+  return {
+    mostEfficient: sorted.slice(0, limit),
+    leastEfficient: sorted.slice(-limit).reverse(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Insight tự động (rule-based) cho trang /creators.
 // ---------------------------------------------------------------------------
 
@@ -1704,10 +1822,14 @@ export type TagAnalysis = {
 };
 
 // Tag do AI tự động gắn khi duyệt video (không phải hành vi creator/campaign) -
-// tăng đột biến số video gắn tag này chỉ phản ánh AI duyệt nhiều/ít hơn tuần
-// trước, không phải dấu hiệu bất thường cần điều tra - loại khỏi cảnh báo
-// "tag tăng đột biến" ở generateCreatorInsights/generateDashboardInsights.
-const AI_AUTO_TAGS = new Set(["Suggest Auto Approved", "Suggest Auto Rejected"]);
+// không phản ánh hành vi creator/campaign nên loại hẳn khỏi tag analysis, không
+// chỉ khỏi cảnh báo "tag tăng đột biến".
+const AI_AUTO_TAGS = new Set([
+  "Suggest Auto Approved",
+  "Suggest Auto Rejected",
+  "Suggest Approved",
+  "Suggest Rejected",
+]);
 
 export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
   const tagWeekly = new Map<string, Map<string, number>>();
@@ -1720,7 +1842,7 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
     const views = item.statistic?.view?.total ?? 0;
 
     (item.warningTags ?? []).forEach((tag) => {
-      if (!tag?.name) return;
+      if (!tag?.name || AI_AUTO_TAGS.has(tag.name)) return;
 
       const totals = tagTotals.get(tag.name) ?? { videos: 0, totalViews: 0 };
       totals.videos += 1;
@@ -1748,11 +1870,7 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
         priorCounts.length > 0 ? priorCounts.reduce((sum, c) => sum + c, 0) / priorCounts.length : 0;
 
       // Cần tối thiểu vài video để tránh báo động giả (vd 1 -> 2 video).
-      const isAnomalous =
-        !AI_AUTO_TAGS.has(name) &&
-        priorWeeks.length > 0 &&
-        thisWeekVideos >= 3 &&
-        thisWeekVideos > priorAvgWeeklyVideos * 2;
+      const isAnomalous = priorWeeks.length > 0 && thisWeekVideos >= 3 && thisWeekVideos > priorAvgWeeklyVideos * 2;
 
       return {
         name,
@@ -2053,13 +2171,6 @@ export function generateCampaignInsights(
   return insights.slice(0, 6);
 }
 
-function nextMonthLabel(dateStr: string): string {
-  const [year, month] = dateStr.split("-").map(Number);
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return `${String(nextMonth).padStart(2, "0")}/${nextYear}`;
-}
-
 // ---------------------------------------------------------------------------
 // Insight tự động (rule-based) cho dashboard chính (trang /).
 // ---------------------------------------------------------------------------
@@ -2068,9 +2179,7 @@ export function generateDashboardInsights(
   metrics: ContentMetrics,
   sourceComparison: SourceComparison[],
   tagAnalysis: TagAnalysis[],
-  daysInRange: number,
-  items: ContentItem[],
-  referenceDate: string
+  items: ContentItem[]
 ): string[] {
   const insights: string[] = [];
 
@@ -2082,36 +2191,6 @@ export function generateDashboardInsights(
         compliance.atRiskPct
       )}) không đạt chuẩn tương tác tối thiểu (>0.5% hoặc tỉ lệ comment/view theo thể lệ) - có nguy cơ bị BTC từ chối/không tính thưởng.`
     );
-  }
-
-  // 0b. Nhắc kỳ đối soát/thanh toán hoa hồng - tính động theo referenceDate (giống nhau ở mọi
-  // thể lệ đã đọc: đối soát ngày 05-10 tháng sau, thanh toán 1 ngày Thứ Năm trong 18-25).
-  const cycleMonth = nextMonthLabel(referenceDate);
-  insights.push(
-    `Kỳ đối soát tháng này sẽ diễn ra ngày 05-10/${cycleMonth}, thanh toán hoa hồng dự kiến vào 1 ngày Thứ Năm trong khoảng 18-25/${cycleMonth}.`
-  );
-
-  // 1. Video ngày gần nhất có dữ liệu so với trung bình ngày trong kỳ đang xem. Dùng
-  // referenceDate (ngày sync gần nhất) thay vì vnToday() thật - dashboard chỉ sync 1 lần/sáng
-  // nên "hôm nay" theo lịch luôn gần như rỗng, gây báo động giả liên tục.
-  const today = referenceDate;
-  const videosToday = metrics.byDay.find((d) => d.date === today)?.videos ?? 0;
-  const avgVideosPerDay = daysInRange > 0 ? metrics.totalVideos / daysInRange : 0;
-  if (avgVideosPerDay >= 1) {
-    const diffPct = ((videosToday - avgVideosPerDay) / avgVideosPerDay) * 100;
-    if (diffPct <= -30) {
-      insights.push(
-        `Ngày ${formatDateVi(today)} (gần nhất có dữ liệu) mới có ${formatNumber(videosToday)} video, thấp hơn ${formatPercent(
-          Math.abs(diffPct)
-        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ - nhắc creator đăng bài.`
-      );
-    } else if (diffPct >= 30) {
-      insights.push(
-        `Ngày ${formatDateVi(today)} (gần nhất có dữ liệu) có ${formatNumber(videosToday)} video, cao hơn ${formatPercent(
-          diffPct
-        )} so với trung bình ${formatNumber(avgVideosPerDay)} video/ngày trong kỳ.`
-      );
-    }
   }
 
   // 2. Nền tảng "lãng phí sức đăng": % video cao nhưng % views thấp hẳn.
