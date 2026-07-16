@@ -221,6 +221,15 @@ async function fetchAllRows<T>(
 // Đọc dữ liệu (dùng bởi app/api/data/**)
 // ---------------------------------------------------------------------------
 
+// Postgres báo "canceling statement due to statement timeout" (code 57014)
+// khi query vượt statement_timeout của role authenticator (mặc định Supabase
+// đặt 8s). Thường chỉ xảy ra lúc instance đang bận đột xuất (sync buổi sáng
+// chạy UPDATE lớn, nhiều người mở cùng lúc...) - thử lại 1 lần gần như luôn
+// thành công vì lần chạy đầu đã kéo dữ liệu vào page cache của Postgres.
+function isStatementTimeout(error: { code?: string; message?: string }): boolean {
+  return error.code === "57014" || (error.message ?? "").includes("statement timeout");
+}
+
 export async function fetchLatestVideosByPublishedRange(
   fromDate: string,
   toDate: string,
@@ -236,11 +245,17 @@ export async function fetchLatestVideosByPublishedRange(
   // liệu sync trước khi có is_latest hoặc lúc markLatestSnapshot() chạy dở.
   // Trả về jsonb nên không dính giới hạn 1000 dòng/response của PostgREST -
   // 1 round-trip duy nhất lấy trọn kết quả thay vì phân trang nhiều trang.
-  const { data, error } = await supabase.rpc("videos_latest_in_range_json", {
-    from_at: fromAt,
-    to_at: toAt,
-    p_event_id: options.eventId ?? null,
-  });
+  const run = () =>
+    supabase.rpc("videos_latest_in_range_json", {
+      from_at: fromAt,
+      to_at: toAt,
+      p_event_id: options.eventId ?? null,
+    });
+
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
   if (error) throw error;
 
   return ((data ?? []) as VideoRow[]).map(videoRowToContentItem);

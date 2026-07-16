@@ -131,3 +131,11 @@ alter table creators enable row level security;
 
 -- Không tạo policy nào cho anon/authenticated: chỉ SERVICE ROLE KEY (dùng ở
 -- server, biến env SUPABASE_SERVICE_KEY) mới đọc/ghi được 3 bảng này.
+
+-- TÙY CHỌN (chạy tay nếu vẫn thỉnh thoảng gặp "canceling statement due to
+-- statement timeout"): Supabase mặc định giới hạn mọi query qua PostgREST ở
+-- 8s (role authenticator). Query jsonb cho khoảng ngày dài (60-90 ngày) lúc
+-- instance bận có thể chạm ngưỡng này. App đã có cache theo lần sync + tự
+-- retry nên hiếm gặp; nếu muốn nới hẳn, chạy 2 lệnh sau trong SQL Editor:
+--   alter role authenticator set statement_timeout = '20s';
+--   notify pgrst, 'reload config';

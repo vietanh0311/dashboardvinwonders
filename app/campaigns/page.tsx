@@ -9,7 +9,9 @@ import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
 import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
+import DataErrorBanner from "@/components/DataErrorBanner";
 import Nav from "@/components/Nav";
+import RefreshIndicator from "@/components/RefreshIndicator";
 import PublishHeatmap from "@/components/PublishHeatmap";
 import SourceComparisonTable from "@/components/SourceComparisonTable";
 import TagAnalysisTable from "@/components/TagAnalysisTable";
@@ -67,6 +69,9 @@ export default function CampaignsPage() {
   const isLoading = !content.data;
   const isValidating = content.isValidating;
   const error = content.error ?? eventsList.error;
+  // Đang tải range mới nhưng màn hình vẫn là số liệu cũ - bật thanh tiến trình
+  // + làm mờ nội dung để người dùng biết dữ liệu đang cập nhật, không phải đơ.
+  const isRefreshing = isValidating && !isLoading;
 
   const rawItems = useMemo(() => content.data ?? [], [content.data]);
   const items = useMemo(() => filterContentItems(rawItems, filters), [rawItems, filters]);
@@ -98,6 +103,7 @@ export default function CampaignsPage() {
 
   return (
     <main className="min-h-screen bg-emerald-50/40">
+      <RefreshIndicator active={isRefreshing} />
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2">
@@ -127,33 +133,33 @@ export default function CampaignsPage() {
 
         <ContentFilters items={rawItems} value={filters} onChange={setFilters} />
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}. Có thể Supabase chưa
-            được cấu hình hoặc chưa có dữ liệu.
-          </div>
-        )}
+        <DataErrorBanner error={error} hasData={!isLoading} onRetry={refresh} />
 
-        <InsightsPanel isLoading={isLoading} insights={insights} />
+        <div
+          aria-busy={isRefreshing}
+          className={`flex flex-col gap-5 transition-opacity duration-300 ${isRefreshing ? "opacity-60" : "opacity-100"}`}
+        >
+          <InsightsPanel isLoading={isLoading} insights={insights} />
 
-        <ViewDistributionPanel isLoading={isLoading} data={viewDist} />
+          <ViewDistributionPanel isLoading={isLoading} data={viewDist} />
 
-        <PublishHeatmap isLoading={isLoading} data={heatmap} />
+          <PublishHeatmap isLoading={isLoading} data={heatmap} />
 
-        <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
+          <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
 
-        <CampaignTable isLoading={isLoading} data={campaignStats} />
+          <CampaignTable isLoading={isLoading} data={campaignStats} />
 
-        <CampaignLifecycleChart
-          events={eventsList.data ?? []}
-          selectedEventId={selectedEventId}
-          onSelectEvent={setSelectedEventId}
-          lifecycle={lifecycle}
-          momentum={momentum}
-          isLoading={lifecycleFetch.isLoading}
-        />
+          <CampaignLifecycleChart
+            events={eventsList.data ?? []}
+            selectedEventId={selectedEventId}
+            onSelectEvent={setSelectedEventId}
+            lifecycle={lifecycle}
+            momentum={momentum}
+            isLoading={lifecycleFetch.isLoading}
+          />
 
-        <TagAnalysisTable isLoading={isLoading} data={tagAnalysis} />
+          <TagAnalysisTable isLoading={isLoading} data={tagAnalysis} />
+        </div>
       </div>
     </main>
   );
