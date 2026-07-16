@@ -10,7 +10,9 @@ import CreatorTable from "@/components/CreatorTable";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
+import DataErrorBanner from "@/components/DataErrorBanner";
 import Nav from "@/components/Nav";
+import RefreshIndicator from "@/components/RefreshIndicator";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
 import TierBreakdownTable from "@/components/TierBreakdownTable";
@@ -93,6 +95,9 @@ export default function CreatorsPage() {
   const isLoading = !current.data || !previous.data;
   const isValidating = current.isValidating || previous.isValidating;
   const error = current.error ?? previous.error;
+  // Đang tải range mới nhưng màn hình vẫn là số liệu cũ - bật thanh tiến trình
+  // + làm mờ nội dung để người dùng biết dữ liệu đang cập nhật, không phải đơ.
+  const isRefreshing = isValidating && !isLoading;
 
   const rawCurrentItems = useMemo(() => current.data ?? [], [current.data]);
   const currentItems = useMemo(() => filterContentItems(rawCurrentItems, filters), [rawCurrentItems, filters]);
@@ -234,6 +239,7 @@ export default function CreatorsPage() {
 
   return (
     <main className="min-h-screen bg-emerald-50/40">
+      <RefreshIndicator active={isRefreshing} />
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2">
@@ -266,13 +272,12 @@ export default function CreatorsPage() {
 
         <ContentFilters items={rawCurrentItems} value={filters} onChange={setFilters} />
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}. Có thể Supabase chưa
-            được cấu hình hoặc chưa có dữ liệu.
-          </div>
-        )}
+        <DataErrorBanner error={error} hasData={!isLoading} onRetry={refresh} />
 
+        <div
+          aria-busy={isRefreshing}
+          className={`flex flex-col gap-5 transition-opacity duration-300 ${isRefreshing ? "opacity-60" : "opacity-100"}`}
+        >
         <InsightsPanel isLoading={isLoading} insights={insights} />
 
         <div className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -356,6 +361,7 @@ export default function CreatorsPage() {
         </div>
 
         <CpvRankingPanel isLoading={isLoading} data={cpvRanking} onSelectCreator={setSelectedCreatorId} />
+        </div>
       </div>
 
       {selectedCreator && (

@@ -5,6 +5,7 @@ import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
 import ContentTable from "@/components/ContentTable";
 import DailyChart from "@/components/DailyChart";
+import DataErrorBanner from "@/components/DataErrorBanner";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import EventTable from "@/components/EventTable";
@@ -12,11 +13,18 @@ import InsightsPanel from "@/components/InsightsPanel";
 import KpiCards from "@/components/KpiCards";
 import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
 import Nav from "@/components/Nav";
+import RefreshIndicator from "@/components/RefreshIndicator";
+import SourceComparisonTable from "@/components/SourceComparisonTable";
 import TagTable from "@/components/TagTable";
+import TopCreatorsCard from "@/components/TopCreatorsCard";
+import TopVideosCard from "@/components/TopVideosCard";
+import UnitComparisonTable from "@/components/UnitComparisonTable";
 import {
+  computeCreatorStats,
   computeMetrics,
   computeSourceComparison,
   computeTagAnalysis,
+  computeUnitComparison,
   fetchContentsSmart,
   fetchLastSync,
   filterContentItems,
@@ -44,6 +52,9 @@ export default function DashboardPage() {
   // vẫn giữ kết quả của range trước trong lúc range mới đang tải - dùng !data
   // để bảng/biểu đồ hiện dữ liệu cũ (mờ) thay vì skeleton trắng mỗi lần đổi filter.
   const isLoading = !data;
+  // Đang tải range mới nhưng màn hình vẫn là số liệu cũ - bật thanh tiến trình
+  // + làm mờ nội dung để người dùng biết dữ liệu đang cập nhật, không phải đơ.
+  const isRefreshing = isValidating && !isLoading;
 
   // Dashboard chỉ sync 1 lần/sáng nên "hôm nay" theo lịch (vnToday()) gần như luôn rỗng - dùng
   // ngày sync gần nhất (đã có sẵn, cùng SWR key với DataUpdateBanner/LastSyncBadge nên không tốn
@@ -55,6 +66,8 @@ export default function DashboardPage() {
   const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);
   const sourceComparison = useMemo(() => computeSourceComparison(filteredData), [filteredData]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(filteredData), [filteredData]);
+  const creatorStats = useMemo(() => computeCreatorStats(filteredData), [filteredData]);
+  const unitComparison = useMemo(() => computeUnitComparison(creatorStats), [creatorStats]);
 
   const insights = useMemo(
     () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, filteredData),
@@ -72,6 +85,7 @@ export default function DashboardPage() {
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
   return (
     <main className="min-h-screen bg-emerald-50/40">
+      <RefreshIndicator active={isRefreshing} />
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2">
@@ -101,33 +115,42 @@ export default function DashboardPage() {
 
         <ContentFilters items={data ?? []} value={filters} onChange={setFilters} />
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Lỗi khi tải dữ liệu: {error instanceof Error ? error.message : "không xác định"}. Có thể Supabase chưa
-            được cấu hình hoặc chưa có dữ liệu.
+        <DataErrorBanner error={error} hasData={!!data} onRetry={() => mutate()} />
+
+        <div
+          aria-busy={isRefreshing}
+          className={`flex flex-col gap-5 transition-opacity duration-300 ${isRefreshing ? "opacity-60" : "opacity-100"}`}
+        >
+          <InsightsPanel isLoading={isLoading} insights={insights} />
+
+          <KpiCards
+            isLoading={isLoading}
+            totalVideos={metrics.totalVideos}
+            totalViews={metrics.totalViews}
+            uniqueCreators={metrics.uniqueCreators}
+            videosToday={videosToday}
+            referenceDate={referenceDate}
+            avgViewsPerVideo={avgViewsPerVideo}
+          />
+
+          <DailyChart isLoading={isLoading} byDay={metrics.byDay} bySource={metrics.bySource} />
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <TopCreatorsCard data={creatorStats} isLoading={isLoading} />
+            <TopVideosCard items={filteredData} isLoading={isLoading} />
           </div>
-        )}
 
-        <InsightsPanel isLoading={isLoading} insights={insights} />
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <EventTable data={metrics.byEvent} isLoading={isLoading} />
+            <TagTable data={metrics.byTag} isLoading={isLoading} />
+          </div>
 
-        <KpiCards
-          isLoading={isLoading}
-          totalVideos={metrics.totalVideos}
-          totalViews={metrics.totalViews}
-          uniqueCreators={metrics.uniqueCreators}
-          videosToday={videosToday}
-          referenceDate={referenceDate}
-          avgViewsPerVideo={avgViewsPerVideo}
-        />
+          <SourceComparisonTable data={sourceComparison} isLoading={isLoading} />
 
-        <DailyChart isLoading={isLoading} byDay={metrics.byDay} bySource={metrics.bySource} />
+          <UnitComparisonTable data={unitComparison} isLoading={isLoading} />
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <EventTable data={metrics.byEvent} isLoading={isLoading} />
-          <TagTable data={metrics.byTag} isLoading={isLoading} />
+          <ContentTable items={latestContents} isLoading={isLoading} />
         </div>
-
-        <ContentTable items={latestContents} isLoading={isLoading} />
       </div>
     </main>
   );
