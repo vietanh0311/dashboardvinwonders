@@ -26,6 +26,13 @@ export function getSupabaseAdmin(): SupabaseClient {
   if (!cachedClient) {
     cachedClient = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        // Next.js App Router mặc định đưa các GET fetch vào Data Cache (kể cả
+        // khi route đã khai báo force-dynamic) - từng làm dashboard trả về dữ
+        // liệu Supabase cũ vô thời hạn sau khi sync. Ép no-store cho MỌI
+        // request PostgREST để luôn đọc dữ liệu tươi.
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
     });
   }
 
