@@ -10,10 +10,16 @@ const VC_API_BASE_URL = (process.env.VC_API_BASE_URL || "https://vcreator-admin-
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, context: { params: { path: string[] } }) {
-  const token = req.headers.get("x-vc-token");
+  // Ưu tiên token client gửi lên (localStorage, qua TokenSettings cũ); nếu
+  // không có thì dùng token cấu hình server-side - từ khi UI nhập token bị ẩn
+  // (commit 45153cc), client không còn cách nào tự cung cấp token nữa.
+  const token = req.headers.get("x-vc-token") || process.env.VC_API_TOKEN;
 
   if (!token) {
-    return NextResponse.json({ error: "missing token" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Server chưa cấu hình VC_API_TOKEN (và request không kèm token). Liên hệ quản trị viên." },
+      { status: 401 }
+    );
   }
 
   const pathSegments = context.params.path ?? [];
