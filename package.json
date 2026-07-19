@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "sync": "tsx --env-file=.env.local scripts/sync.ts",
+    "sync-users": "tsx --env-file=.env.local scripts/sync-all-users.ts",
     "verify-login": "tsx --env-file=.env.local scripts/verify-vc-login.ts"
   },
   "dependencies": {
