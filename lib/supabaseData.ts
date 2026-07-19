@@ -172,23 +172,25 @@ export function userDetailToCreatorRow(
 // Chiều ngược lại: CreatorRow (Supabase) -> UserDetail để UI dùng y như dữ liệu
 // từ API live. Sau khi bảng creators có đủ cột, đây là nguồn DUY NHẤT cho
 // dashboard - trình duyệt không gọi VC API nữa.
-export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
-  const info =
-    row.city || row.birth_day || row.gender
-      ? {
-          cityName: row.city ?? undefined,
-          birthDay: row.birth_day ?? undefined,
-          gender: row.gender ?? undefined,
-        }
-      : undefined;
+// VC API trả chuỗi rỗng cho trường chưa điền (vd cityName: ""), và chuỗi rỗng
+// KHÔNG bị `?? "-"` ở UI bắt được - kết quả là ô trống trông như lỗi giao diện
+// thay vì "chưa có dữ liệu". Quy về undefined ngay ở tầng dữ liệu.
+function orUndefined(value: string | null): string | undefined {
+  return value === null || value === "" ? undefined : value;
+}
 
+export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
+  const cityName = orUndefined(row.city);
+  const birthDay = orUndefined(row.birth_day);
+  const gender = orUndefined(row.gender);
+  const info = cityName || birthDay || gender ? { cityName, birthDay, gender } : undefined;
+
+  const contractStatus = orUndefined(row.contract_status);
+  const contractName = orUndefined(row.contract_name);
+  const taxNumber = orUndefined(row.contract_tax_number);
   const contract =
-    row.contract_status || row.contract_name || row.contract_tax_number
-      ? {
-          status: row.contract_status ?? undefined,
-          name: row.contract_name ?? undefined,
-          taxNumber: row.contract_tax_number ?? undefined,
-        }
+    contractStatus || contractName || taxNumber
+      ? { status: contractStatus, name: contractName, taxNumber }
       : undefined;
 
   // Chỉ dựng statistic khi có ít nhất 1 giá trị: nếu không, UI sẽ hiển thị
@@ -204,18 +206,18 @@ export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
 
   return {
     _id: row.creator_id,
-    email: row.email ?? undefined,
+    email: orUndefined(row.email),
     emailVerified: row.email_verified ?? undefined,
     phone: row.phone ? { full: row.phone, verified: row.phone_verified ?? undefined } : undefined,
     tiktok: row.tiktok_username ? { username: row.tiktok_username } : undefined,
     info,
     contract,
-    hashtag: row.hashtag ?? undefined,
-    accountType: row.account_type ?? undefined,
+    hashtag: orUndefined(row.hashtag),
+    accountType: orUndefined(row.account_type),
     banned: row.banned ?? undefined,
-    bannedReason: row.banned_reason ?? undefined,
+    bannedReason: orUndefined(row.banned_reason),
     statistic,
-    lastActivatedAt: row.last_activated_at ?? undefined,
+    lastActivatedAt: orUndefined(row.last_activated_at),
   };
 }
 
