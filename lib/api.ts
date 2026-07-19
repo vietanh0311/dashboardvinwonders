@@ -1592,16 +1592,25 @@ export function computeViewDistribution(items: ContentItem[]): ViewDistribution 
 
 export const WEEKDAY_LABELS = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 
+// Số video tối thiểu trong 1 ô (ngày x giờ) để được tính vào "khung giờ vàng" - dưới ngưỡng
+// này, 1 video ăn may/viral đơn lẻ cũng đủ khiến ô đó trông như tốt nhất dù không có ý nghĩa
+// thống kê. Dùng chung cho cả heatmap gộp và heatmap tách theo nền tảng.
+export const HEATMAP_MIN_SAMPLE = 3;
+
 export type HeatmapCell = {
   dayOfWeek: number; // 0 = Thứ 2 ... 6 = Chủ nhật
   hour: number; // 0-23 (giờ VN)
   videos: number;
   totalViews: number;
   avgViews: number;
+  // Số video theo từng nền tảng rơi vào đúng ô này - chỉ có ý nghĩa ở heatmap gộp (nhiều nền
+  // tảng); dùng để chú thích ô "khung giờ vàng" gộp thực ra đang bị kéo bởi nền tảng nào (xem
+  // dominantHeatmapSource()).
+  bySource?: Partial<Record<ContentSource, number>>;
 };
 
 export function computePublishHeatmap(items: ContentItem[]): HeatmapCell[] {
-  const cells = new Map<string, { videos: number; totalViews: number }>();
+  const cells = new Map<string, { videos: number; totalViews: number; bySource: Map<ContentSource, number> }>();
 
   items.forEach((item) => {
     const iso = item.publishedAt || item.createdAt;
@@ -1615,26 +1624,83 @@ export function computePublishHeatmap(items: ContentItem[]): HeatmapCell[] {
     const views = item.statistic?.view?.total ?? 0;
 
     const key = `${dayOfWeek}-${hour}`;
-    const entry = cells.get(key) ?? { videos: 0, totalViews: 0 };
+    const entry = cells.get(key) ?? { videos: 0, totalViews: 0, bySource: new Map<ContentSource, number>() };
     entry.videos += 1;
     entry.totalViews += views;
+    if (item.source) entry.bySource.set(item.source, (entry.bySource.get(item.source) ?? 0) + 1);
     cells.set(key, entry);
   });
 
   const result: HeatmapCell[] = [];
   for (let day = 0; day < 7; day++) {
     for (let hour = 0; hour < 24; hour++) {
-      const entry = cells.get(`${day}-${hour}`) ?? { videos: 0, totalViews: 0 };
+      const entry = cells.get(`${day}-${hour}`);
       result.push({
         dayOfWeek: day,
         hour,
-        videos: entry.videos,
-        totalViews: entry.totalViews,
-        avgViews: entry.videos > 0 ? entry.totalViews / entry.videos : 0,
+        videos: entry?.videos ?? 0,
+        totalViews: entry?.totalViews ?? 0,
+        avgViews: entry && entry.videos > 0 ? entry.totalViews / entry.videos : 0,
+        bySource:
+          entry && entry.bySource.size > 0
+            ? (Object.fromEntries(entry.bySource) as Partial<Record<ContentSource, number>>)
+            : undefined,
       });
     }
   }
   return result;
+}
+
+// Chọn ô "khung giờ vàng" tốt nhất trong 1 lưới heatmap - bỏ qua ô có quá ít video (xem
+// HEATMAP_MIN_SAMPLE) để tránh gợi ý sai chỉ vì 1 video ăn may.
+export function pickBestHeatmapCell(cells: HeatmapCell[], minSample: number = HEATMAP_MIN_SAMPLE): HeatmapCell | null {
+  // avgViews > 0 loại luôn trường hợp 1 nền tảng chưa có view nào ghi nhận (vd sự cố sync) -
+  // nếu không, ô đầu tiên đủ mẫu sẽ "thắng" một cách tuỳ tiện dù mọi ô đều hoà 0, trông như 1
+  // khung giờ vàng thật trong khi thực chất không có tín hiệu gì.
+  const meaningful = cells.filter((c) => c.videos >= minSample && c.avgViews > 0);
+  if (meaningful.length === 0) return null;
+  return [...meaningful].sort((a, b) => b.avgViews - a.avgViews)[0];
+}
+
+// Nền tảng chiếm đa số (>50% video) trong 1 ô heatmap gộp - dùng để chú thích "khung giờ vàng"
+// gộp thực ra chủ yếu đến từ nền tảng nào, tránh hiểu nhầm đây là khung giờ chung cho mọi nền
+// tảng. Trả về null nếu video rải đều, không có nền tảng nào chiếm đa số.
+export function dominantHeatmapSource(cell: HeatmapCell | null | undefined): ContentSource | null {
+  if (!cell?.bySource || cell.videos === 0) return null;
+  const entries = Object.entries(cell.bySource) as [ContentSource, number][];
+  if (entries.length === 0) return null;
+  const [topSource, topCount] = entries.sort((a, b) => b[1] - a[1])[0];
+  return topCount / cell.videos > 0.5 ? topSource : null;
+}
+
+export type SourceHeatmap = {
+  source: ContentSource;
+  totalVideos: number;
+  cells: HeatmapCell[];
+  best: HeatmapCell | null;
+};
+
+// Heatmap gộp (computePublishHeatmap) dồn mọi nền tảng vào chung 1 lưới nên "khung giờ vàng"
+// dễ bị lệch theo nền tảng chiếm nhiều video nhất (thường TikTok) - mỗi nền tảng có tệp người
+// xem/thuật toán phân phối nội dung khác nhau nên khung giờ tốt thực sự khác nhau, không chỉ do
+// nhiễu thống kê. Hàm này tách riêng heatmap cho từng nền tảng để PublishHeatmap đưa ra khuyến
+// nghị đúng cho từng nhóm creator theo nền tảng họ đăng (kết hợp với campaign đang lọc ở
+// ContentFilters, vì items truyền vào đây đã được filterContentItems() lọc theo eventName).
+export function computePublishHeatmapBySource(items: ContentItem[]): SourceHeatmap[] {
+  const bySource = new Map<ContentSource, ContentItem[]>();
+  items.forEach((item) => {
+    if (!item.source) return;
+    const list = bySource.get(item.source) ?? [];
+    list.push(item);
+    bySource.set(item.source, list);
+  });
+
+  return Array.from(bySource.entries())
+    .map(([source, list]) => {
+      const cells = computePublishHeatmap(list);
+      return { source, totalVideos: list.length, cells, best: pickBestHeatmapCell(cells) };
+    })
+    .sort((a, b) => b.totalVideos - a.totalVideos);
 }
 
 // ---------------------------------------------------------------------------
@@ -2163,14 +2229,15 @@ export function generateCampaignInsights(
     }
   }
 
-  // 2. Khung giờ đăng tốt nhất (đủ mẫu >=3 video) so với avg views toàn hệ (= mean).
-  const meaningfulCells = heatmap.filter((c) => c.videos >= 3);
-  if (meaningfulCells.length > 0 && viewDist.mean > 0) {
-    const best = [...meaningfulCells].sort((a, b) => b.avgViews - a.avgViews)[0];
+  // 2. Khung giờ đăng tốt nhất (đủ mẫu, xem HEATMAP_MIN_SAMPLE) so với avg views toàn hệ (= mean).
+  const best = pickBestHeatmapCell(heatmap);
+  if (best && viewDist.mean > 0) {
     const ratio = best.avgViews / viewDist.mean;
     if (ratio >= 1.5) {
+      const dominant = dominantHeatmapSource(best);
+      const dominantNote = dominant ? ` (chủ yếu ${SOURCE_LABEL[dominant] ?? dominant})` : "";
       insights.push(
-        `Khung giờ ${best.hour}h ${WEEKDAY_LABELS[best.dayOfWeek]} cho avg views cao gấp ${ratio.toFixed(
+        `Khung giờ ${best.hour}h ${WEEKDAY_LABELS[best.dayOfWeek]}${dominantNote} cho avg views cao gấp ${ratio.toFixed(
           1
         )} lần trung bình - hướng dẫn creators đăng vào giờ này.`
       );
