@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import CopyTableButton from "@/components/CopyTableButton";
 import {
   CHANNEL_PLATFORM_LABEL,
   CREATOR_TIER_LABEL,
@@ -11,6 +12,23 @@ import {
   type CreatorWithTier,
   type UserDetail,
 } from "@/lib/api";
+
+const COPY_HEADERS = [
+  "#",
+  "Creator",
+  "Cơ sở",
+  "Tier",
+  "Videos",
+  "Views",
+  "Views TB/video",
+  "Engagement (%)",
+  "Cash",
+  "CPV",
+  "Email",
+  "SĐT",
+  "Thành phố",
+  "Hợp đồng",
+];
 
 type Props = {
   data: CreatorWithTier[];
@@ -101,6 +119,32 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
     [sorted, page]
   );
 
+  // Copy toàn bộ danh sách đã sort (không chỉ trang đang xem) để dán vào
+  // Google Sheets/Excel là dùng được ngay cho cả bảng, không riêng 1 trang.
+  const copyRows = useMemo(
+    () =>
+      sorted.map((row, index) => {
+        const profile = profiles.get(row.creatorId);
+        return [
+          index + 1,
+          row.name,
+          row.workplaceUnitName ?? "-",
+          CREATOR_TIER_LABEL[row.tier],
+          row.videos,
+          Math.round(row.totalViews),
+          Math.round(row.avgViewsPerVideo),
+          `${(row.engagementRate * 100).toFixed(2)}%`,
+          Math.round(row.totalCash),
+          Number(row.cpv.toFixed(2)),
+          profile?.email ?? "-",
+          profile?.phone?.full ?? "-",
+          profile?.info?.cityName ?? "-",
+          profile?.contract?.status ?? "-",
+        ];
+      }),
+    [sorted, profiles]
+  );
+
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -114,9 +158,12 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
 
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-800">Xếp hạng creator</h3>
-        <span className="text-xs text-gray-400">Bấm vào 1 hàng để xem chi tiết</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">Bấm vào 1 hàng để xem chi tiết</span>
+          <CopyTableButton headers={COPY_HEADERS} rows={copyRows} />
+        </div>
       </div>
 
       <div className="max-h-[36rem] overflow-y-auto">

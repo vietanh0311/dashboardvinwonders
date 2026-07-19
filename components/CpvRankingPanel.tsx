@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import CopyTableButton from "@/components/CopyTableButton";
 import { formatCurrency, formatNumber, type CpvRanking, type CreatorWithTier } from "@/lib/api";
 
 type Props = {
@@ -7,6 +9,8 @@ type Props = {
   data: CpvRanking;
   onSelectCreator: (creatorId: string) => void;
 };
+
+const COPY_HEADERS = ["Nhóm", "Creator", "Views", "Cash", "CPV"];
 
 function CreatorRow({
   creator,
@@ -34,9 +38,32 @@ function CreatorRow({
 export default function CpvRankingPanel({ isLoading, data, onSelectCreator }: Props) {
   const hasData = data.mostEfficient.length > 0 || data.leastEfficient.length > 0;
 
+  const copyRows = useMemo(
+    () => [
+      ...data.mostEfficient.map((c) => [
+        "Hiệu quả nhất",
+        c.name,
+        Math.round(c.totalViews),
+        Math.round(c.totalCash),
+        Number(c.cpv.toFixed(2)),
+      ]),
+      ...data.leastEfficient.map((c) => [
+        "Kém hiệu quả nhất",
+        c.name,
+        Math.round(c.totalViews),
+        Math.round(c.totalCash),
+        Number(c.cpv.toFixed(2)),
+      ]),
+    ],
+    [data]
+  );
+
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-gray-800">Xếp hạng CPV (chi phí/view)</h3>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-800">Xếp hạng CPV (chi phí/view)</h3>
+        <CopyTableButton headers={COPY_HEADERS} rows={copyRows} />
+      </div>
       <p className="mb-3 text-xs text-gray-400">
         Chỉ xét creator có phát sinh cash và đủ views để tránh nhiễu mẫu nhỏ.
       </p>
