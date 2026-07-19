@@ -92,6 +92,10 @@ export type UserTiktok = {
 
 export type UserDetail = {
   _id: string;
+  // Có ở endpoint danh sách /users (khác /users/<id> - vốn không cần trường
+  // này vì luôn có tên từ createdBy.name của video). Cần cho user chưa từng
+  // đăng video, lúc đó đây là nguồn tên DUY NHẤT.
+  name?: string;
   email?: string;
   emailVerified?: boolean;
   phone?: UserPhone;
