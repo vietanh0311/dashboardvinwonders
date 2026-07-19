@@ -10,6 +10,7 @@ import {
   upsertCreatorRows,
   upsertSnapshotMeta,
   upsertVideoRows,
+  userDetailToCreatorRow,
   type CreatorRow,
 } from "@/lib/supabaseData";
 import { fetchContentsRangeServer, fetchUserDetailServer } from "@/lib/vcServer";
@@ -123,21 +124,7 @@ export async function POST(request: NextRequest) {
           try {
             const profile = await fetchUserDetailServer(token, creatorId);
             const fallbackItem = items.find((it) => it.createdBy?._id === creatorId);
-            creatorRows.push({
-              creator_id: creatorId,
-              name: fallbackItem?.createdBy?.name ?? null,
-              hashtag: profile?.hashtag ?? fallbackItem?.createdBy?.hashtag ?? null,
-              email: profile?.email ?? null,
-              phone: profile?.phone?.full ?? null,
-              phone_verified: profile?.phone?.verified ?? null,
-              city: profile?.info?.cityName ?? null,
-              tiktok_username: profile?.tiktok?.username ?? null,
-              contract_status: profile?.contract?.status ?? null,
-              contract_name: profile?.contract?.name ?? null,
-              account_type: profile?.accountType ?? null,
-              last_activated_at: profile?.lastActivatedAt ?? null,
-              updated_at: new Date().toISOString(),
-            });
+            creatorRows.push(userDetailToCreatorRow(creatorId, profile, fallbackItem?.createdBy));
           } catch {
             // Bỏ qua creator lỗi (vd tài khoản đã bị xoá) - video của họ vẫn
             // được lưu vào bảng videos, chỉ thiếu profile trong bảng creators.

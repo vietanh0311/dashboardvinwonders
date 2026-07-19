@@ -33,3 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*
+
+# job cào dữ liệu hàng ngày ở máy local (scripts/daily-sync.sh)
+.sync-state
+.sync-lock/
+sync.log
+sync-launchd.log

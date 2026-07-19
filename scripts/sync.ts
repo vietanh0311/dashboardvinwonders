@@ -1,12 +1,14 @@
-// Cào nhanh dữ liệu VinWonders từ VC Creator Admin API vào Supabase, chạy
-// thẳng bằng token dán ở terminal - không cần mở trình duyệt / bấm "Cập nhật
-// dữ liệu" trên UI. Logic giống hệt app/api/sync/route.ts (dùng chung
-// lib/vcServer.ts + lib/supabaseData.ts) nên không cần chạy `npm run dev`.
+// Cào dữ liệu VinWonders từ VC Creator Admin API vào Supabase. Logic giống hệt
+// app/api/sync/route.ts (dùng chung lib/vcServer.ts + lib/supabaseData.ts) nên
+// không cần chạy `npm run dev`.
 //
-// Dùng: npm run sync -- <vc-token> [số-ngày] [--refresh-creators]
-// (token hết hạn sau vài tiếng - lấy token mới mỗi lần chạy; mặc định cào 90
-// ngày/3 tháng gần nhất - video/creator đã có sẵn trong DB được bỏ qua ở bước
-// resolve kênh/tải profile nên các lần chạy sau không bị chậm lại)
+// Dùng: npm run sync -- [số-ngày] [--refresh-creators] [--token=<jwt>]
+//
+// Mặc định KHÔNG cần token: tự đăng nhập bằng VC_STAFF_EMAIL/VC_STAFF_PASSWORD
+// (xem lib/vcAuth.ts) - nhớ bật VPN. --token chỉ để debug bằng token dán tay.
+//
+// Mặc định cào 90 ngày gần nhất - video/creator đã có sẵn trong DB được bỏ qua
+// ở bước resolve kênh/tải profile nên các lần chạy sau không bị chậm lại.
 //
 // --refresh-creators: tải lại profile đầy đủ (SĐT, trạng thái xác minh SĐT,
 // tên hợp đồng...) cho TẤT CẢ creator xuất hiện trong cửa sổ ngày đang sync,
@@ -24,9 +26,11 @@ import {
   upsertCreatorRows,
   upsertSnapshotMeta,
   upsertVideoRows,
+  userDetailToCreatorRow,
   type CreatorRow,
 } from "../lib/supabaseData";
-import { fetchContentsRangeServer, fetchUserDetailServer } from "../lib/vcServer";
+import { getCachedTokenExpiry, getVcToken } from "../lib/vcAuth";
+import { fetchContentsRangeServer, fetchUserDetailServer, VcServerError } from "../lib/vcServer";
 
 const DEFAULT_SYNC_WINDOW_DAYS = 90;
 
@@ -35,14 +39,35 @@ async function main() {
   const refreshCreators = args.includes("--refresh-creators");
   const positional = args.filter((a) => !a.startsWith("--"));
 
-  const token = positional[0] || process.env.VC_TOKEN;
-  if (!token) {
-    console.error("Thiếu token. Dùng: npm run sync -- <vc-token> [số-ngày] [--refresh-creators]");
+  // Token là FLAG --token=<jwt>, không phải tham số vị trí. Trước đây token là
+  // positional[0] nên `sync -- 90` hiểu "90" là token và gửi thẳng lên API
+  // (lỗi Unauthorized khó hiểu). Giờ tham số vị trí duy nhất là số ngày.
+  const tokenArg = args.find((a) => a.startsWith("--token="))?.slice("--token=".length);
+
+  const daysArg = Number(positional[0]);
+  if (positional[0] !== undefined && !(Number.isFinite(daysArg) && daysArg > 0)) {
+    console.error(`Tham số "${positional[0]}" không phải số ngày hợp lệ.`);
+    console.error("Dùng: npm run sync -- [số-ngày] [--refresh-creators] [--token=<jwt>]");
     process.exit(1);
   }
-
-  const daysArg = Number(positional[1]);
   const SYNC_WINDOW_DAYS = Number.isFinite(daysArg) && daysArg > 0 ? daysArg : DEFAULT_SYNC_WINDOW_DAYS;
+
+  // Thứ tự ưu tiên: --token (debug) -> VC_TOKEN -> tự đăng nhập bằng
+  // VC_STAFF_EMAIL/VC_STAFF_PASSWORD. Đường mặc định là tự đăng nhập, nên job
+  // chạy theo lịch không cần ai dán token.
+  let token = tokenArg || process.env.VC_TOKEN;
+  if (!token) {
+    console.log("Đang tự đăng nhập VC API...");
+    try {
+      token = await getVcToken();
+    } catch (err) {
+      console.error(`\n${err instanceof Error ? err.message : err}\n`);
+      console.error("Hoặc chạy với token dán tay: npm run sync -- [số-ngày] --token=<jwt>");
+      process.exit(1);
+    }
+    const expiry = getCachedTokenExpiry();
+    console.log(`Đăng nhập OK${expiry ? ` (token hết hạn lúc ${expiry.toLocaleString("vi-VN")})` : ""}.`);
+  }
 
   const startedAt = Date.now();
   const snapshotDate = vnToday();
@@ -95,27 +120,27 @@ async function main() {
   );
   const creatorRows: CreatorRow[] = [];
   let creatorsDone = 0;
+
+  // 401/403 áp dụng cho MỌI creator (tài khoản không có quyền đọc /users/<id>),
+  // nên dừng cả pool ngay thay vì bắn hỏng 1504 request rồi vẫn báo "✓ Xong".
+  // Đây từng là bug thật: catch {} nuốt sạch lỗi quyền, sync in "0 creator đã
+  // tải lại" mà thoát code 0 - job chạy theo lịch hỏng âm thầm hàng ngày.
+  let authError: VcServerError | null = null;
+  let failedCount = 0;
+
   await runWithConcurrency(creatorIdsToFetch, 5, async (creatorId) => {
+    if (authError) return; // đã biết lỗi quyền - khỏi thử tiếp
     try {
       const profile = await fetchUserDetailServer(token, creatorId);
       const fallbackItem = items.find((it) => it.createdBy?._id === creatorId);
-      creatorRows.push({
-        creator_id: creatorId,
-        name: fallbackItem?.createdBy?.name ?? null,
-        hashtag: profile?.hashtag ?? fallbackItem?.createdBy?.hashtag ?? null,
-        email: profile?.email ?? null,
-        phone: profile?.phone?.full ?? null,
-        phone_verified: profile?.phone?.verified ?? null,
-        city: profile?.info?.cityName ?? null,
-        tiktok_username: profile?.tiktok?.username ?? null,
-        contract_status: profile?.contract?.status ?? null,
-        contract_name: profile?.contract?.name ?? null,
-        account_type: profile?.accountType ?? null,
-        last_activated_at: profile?.lastActivatedAt ?? null,
-        updated_at: new Date().toISOString(),
-      });
-    } catch {
-      // Bỏ qua creator lỗi (vd tài khoản đã bị xoá).
+      creatorRows.push(userDetailToCreatorRow(creatorId, profile, fallbackItem?.createdBy));
+    } catch (err) {
+      if (err instanceof VcServerError && (err.status === 401 || err.status === 403)) {
+        authError = authError ?? err;
+        return;
+      }
+      // Lỗi lẻ tẻ (vd tài khoản đã bị xoá) - bỏ qua nhưng vẫn đếm để báo cáo.
+      failedCount += 1;
     } finally {
       creatorsDone += 1;
       if (creatorsDone % 20 === 0 || creatorsDone === creatorIdsToFetch.length) {
@@ -123,6 +148,30 @@ async function main() {
       }
     }
   });
+
+  if (authError) {
+    const e: VcServerError = authError;
+    console.error(`\n✗ DỪNG: không đọc được profile creator - ${e.message} (HTTP ${e.status}).`);
+    console.error("  Tài khoản VC đang dùng không có quyền đọc /users/<id> (cần tài khoản isRoot).");
+    console.error("  Đổi tài khoản rồi chạy lại:  bash scripts/set-vc-password.sh");
+    console.error("\n  KHÔNG ghi gì vào Supabase - dữ liệu cũ giữ nguyên.");
+    process.exit(1);
+  }
+
+  // Vài creator lỗi là bình thường; hỏng quá nửa thì gần như chắc chắn là sự
+  // cố hệ thống, không được im lặng cho qua.
+  if (creatorIdsToFetch.length > 0 && failedCount > creatorIdsToFetch.length / 2) {
+    console.error(
+      `\n✗ DỪNG: ${failedCount}/${creatorIdsToFetch.length} creator lỗi khi tải profile - ` +
+        "quá nhiều để coi là lỗi lẻ tẻ."
+    );
+    console.error("  KHÔNG ghi gì vào Supabase - dữ liệu cũ giữ nguyên.");
+    process.exit(1);
+  }
+
+  if (failedCount > 0) {
+    console.log(`  (${failedCount} creator lỗi, đã bỏ qua - thường là tài khoản đã bị xoá)`);
+  }
 
   console.log("Đang lưu vào Supabase...");
   const videoRows = items.map((item) =>

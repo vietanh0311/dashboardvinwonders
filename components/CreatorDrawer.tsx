@@ -42,6 +42,13 @@ function formatBirthDay(value?: string) {
   }
 }
 
+// Phân biệt "chưa có dữ liệu" (undefined -> "-") với "có dữ liệu và bằng 0"
+// (0 -> "0 ₫"). Hai thứ này trông giống nhau nếu dùng `?? 0` nhưng ý nghĩa
+// hoàn toàn khác nhau khi đọc số liệu tiền.
+function formatMoneyOrDash(value?: number) {
+  return value === undefined || value === null ? "-" : formatCurrency(value);
+}
+
 function initials(name: string) {
   return name
     .trim()
@@ -202,7 +209,12 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
                   <Field
                     label="Bị khoá (banned)"
                     value={
-                      profile.banned ? (
+                      // undefined = CHƯA BIẾT (profile chưa được sync tải về),
+                      // khác hẳn false = biết chắc không bị khoá. Hiện "-" thay
+                      // vì "Không" để không khẳng định điều mình không biết.
+                      profile.banned === undefined ? (
+                        "-"
+                      ) : profile.banned ? (
                         <span className="font-medium text-red-600">Có{profile.bannedReason ? ` - ${profile.bannedReason}` : ""}</span>
                       ) : (
                         "Không"
@@ -228,9 +240,12 @@ export default function CreatorDrawer({ creator, profile, isLoadingProfile, chan
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase text-gray-400">Thống kê tiền</div>
                 <div className="grid grid-cols-3 gap-3">
-                  <Field label="Tổng cash" value={formatCurrency(profile.statistic?.cashTotal ?? 0)} />
-                  <Field label="Còn lại" value={formatCurrency(profile.statistic?.cashRemaining ?? 0)} />
-                  <Field label="Đã rút" value={formatCurrency(profile.statistic?.withdrawTotal ?? 0)} />
+                  {/* Không dùng `?? 0`: creator chưa được sync tải profile sẽ
+                      hiện "0 ₫" trông y như số thật, trong khi thực tế là chưa
+                      có dữ liệu. "-" nói đúng những gì mình biết. */}
+                  <Field label="Tổng cash" value={formatMoneyOrDash(profile.statistic?.cashTotal)} />
+                  <Field label="Còn lại" value={formatMoneyOrDash(profile.statistic?.cashRemaining)} />
+                  <Field label="Đã rút" value={formatMoneyOrDash(profile.statistic?.withdrawTotal)} />
                 </div>
               </div>
             </>

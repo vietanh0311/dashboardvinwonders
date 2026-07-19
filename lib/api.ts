@@ -51,6 +51,10 @@ export type ContentItem = {
     hashtag?: string;
   };
   warningTags: { _id: string; name: string }[];
+  // Username kênh đã resolve sẵn phía server (sync lưu vào videos.channel_username).
+  // Chỉ có ở item đọc từ Supabase - item từ API live không có, phải tự resolve.
+  // Nhờ trường này mà trình duyệt không cần gọi /api/resolve-link nữa.
+  channelUsername?: string | null;
   statistic: {
     view: StatisticBucket;
     like: StatisticBucket;
@@ -238,7 +242,12 @@ export async function vcFetch<T = unknown>(
   path: string,
   params?: Record<string, string | number | undefined>
 ): Promise<T> {
-  const token = getStoredToken();
+  // Proxy ưu tiên x-vc-token hơn VC_API_TOKEN của server, nên một token cũ còn
+  // sót trong localStorage sẽ đè lên token server còn hạn và gây 401 vĩnh viễn.
+  // Token đã hết hạn thì không gửi nữa - để server tự dùng token của nó.
+  const stored = getStoredToken();
+  const expiry = stored ? getTokenExpiry(stored) : null;
+  const token = expiry && expiry.getTime() <= Date.now() ? "" : stored;
 
   let res: Response;
   try {
@@ -834,6 +843,17 @@ export async function resolveShortLinks(
 export function getResolvedChannel(item: ContentItem): ExtractedChannel {
   const sync = extractChannelSync(item.link, item.source);
   if (!sync.needsResolve) return sync;
+
+  // Ưu tiên username sync đã resolve sẵn ở server: có sẵn cho MỌI người xem
+  // dashboard, không phụ thuộc localStorage của từng trình duyệt.
+  if (item.channelUsername) {
+    return {
+      platform: sync.platform,
+      username: item.channelUsername,
+      url: `https://www.tiktok.com/@${item.channelUsername}`,
+      needsResolve: false,
+    };
+  }
 
   const cache = readLinkCache();
   const cached = cache[item._id];
