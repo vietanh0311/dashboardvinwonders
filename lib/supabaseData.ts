@@ -45,13 +45,22 @@ export type CreatorRow = {
   name: string | null;
   hashtag: string | null;
   email: string | null;
+  email_verified: boolean | null;
   phone: string | null;
   phone_verified: boolean | null;
   city: string | null;
+  birth_day: string | null;
+  gender: string | null;
   tiktok_username: string | null;
   contract_status: string | null;
   contract_name: string | null;
+  contract_tax_number: string | null;
   account_type: string | null;
+  banned: boolean | null;
+  banned_reason: string | null;
+  cash_total: number | null;
+  cash_remaining: number | null;
+  withdraw_total: number | null;
   last_activated_at: string | null;
   updated_at: string;
 };
@@ -111,6 +120,7 @@ export function videoRowToContentItem(row: VideoRow): ContentItem {
       workplaceUnitName: row.workplace_unit ?? undefined,
     },
     warningTags: row.tags ?? [],
+    channelUsername: row.channel_username,
     statistic: {
       view: { total: row.views ?? 0 },
       like: { total: row.likes ?? 0 },
@@ -121,19 +131,89 @@ export function videoRowToContentItem(row: VideoRow): ContentItem {
   };
 }
 
+// Dựng CreatorRow từ profile API live. Dùng CHUNG cho scripts/sync.ts và
+// app/api/sync/route.ts - trước đây 2 chỗ tự dựng row riêng nên thêm cột mới
+// phải sửa 2 nơi và rất dễ lệch nhau.
+//
+// fallback là 1 ContentItem bất kỳ của creator: khi API /users/<id> lỗi (tài
+// khoản bị xoá...) vẫn giữ được tên/hashtag lấy từ content, thay vì mất trắng.
+export function userDetailToCreatorRow(
+  creatorId: string,
+  profile: UserDetail | null,
+  fallback?: { name?: string; hashtag?: string }
+): CreatorRow {
+  return {
+    creator_id: creatorId,
+    name: fallback?.name ?? null,
+    hashtag: profile?.hashtag ?? fallback?.hashtag ?? null,
+    email: profile?.email ?? null,
+    email_verified: profile?.emailVerified ?? null,
+    phone: profile?.phone?.full ?? null,
+    phone_verified: profile?.phone?.verified ?? null,
+    city: profile?.info?.cityName ?? null,
+    birth_day: profile?.info?.birthDay ?? null,
+    gender: profile?.info?.gender ?? null,
+    tiktok_username: profile?.tiktok?.username ?? null,
+    contract_status: profile?.contract?.status ?? null,
+    contract_name: profile?.contract?.name ?? null,
+    contract_tax_number: profile?.contract?.taxNumber ?? null,
+    account_type: profile?.accountType ?? null,
+    banned: profile?.banned ?? null,
+    banned_reason: profile?.bannedReason ?? null,
+    cash_total: profile?.statistic?.cashTotal ?? null,
+    cash_remaining: profile?.statistic?.cashRemaining ?? null,
+    withdraw_total: profile?.statistic?.withdrawTotal ?? null,
+    last_activated_at: profile?.lastActivatedAt ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+// Chiều ngược lại: CreatorRow (Supabase) -> UserDetail để UI dùng y như dữ liệu
+// từ API live. Sau khi bảng creators có đủ cột, đây là nguồn DUY NHẤT cho
+// dashboard - trình duyệt không gọi VC API nữa.
 export function creatorRowToUserDetail(row: CreatorRow): UserDetail {
+  const info =
+    row.city || row.birth_day || row.gender
+      ? {
+          cityName: row.city ?? undefined,
+          birthDay: row.birth_day ?? undefined,
+          gender: row.gender ?? undefined,
+        }
+      : undefined;
+
+  const contract =
+    row.contract_status || row.contract_name || row.contract_tax_number
+      ? {
+          status: row.contract_status ?? undefined,
+          name: row.contract_name ?? undefined,
+          taxNumber: row.contract_tax_number ?? undefined,
+        }
+      : undefined;
+
+  // Chỉ dựng statistic khi có ít nhất 1 giá trị: nếu không, UI sẽ hiển thị
+  // "0đ" cho creator chưa refresh profile, trông như số thật mà lại là số bịa.
+  const statistic =
+    row.cash_total !== null || row.cash_remaining !== null || row.withdraw_total !== null
+      ? {
+          cashTotal: row.cash_total ?? undefined,
+          cashRemaining: row.cash_remaining ?? undefined,
+          withdrawTotal: row.withdraw_total ?? undefined,
+        }
+      : undefined;
+
   return {
     _id: row.creator_id,
     email: row.email ?? undefined,
+    emailVerified: row.email_verified ?? undefined,
     phone: row.phone ? { full: row.phone, verified: row.phone_verified ?? undefined } : undefined,
     tiktok: row.tiktok_username ? { username: row.tiktok_username } : undefined,
-    info: row.city ? { cityName: row.city } : undefined,
-    contract:
-      row.contract_status || row.contract_name
-        ? { status: row.contract_status ?? undefined, name: row.contract_name ?? undefined }
-        : undefined,
+    info,
+    contract,
     hashtag: row.hashtag ?? undefined,
     accountType: row.account_type ?? undefined,
+    banned: row.banned ?? undefined,
+    bannedReason: row.banned_reason ?? undefined,
+    statistic,
     lastActivatedAt: row.last_activated_at ?? undefined,
   };
 }

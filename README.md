@@ -22,8 +22,53 @@ Nếu **không** set `DASHBOARD_PASSWORD`, middleware sẽ bỏ qua bước xác
 | `VC_API_BASE_URL` | Không | Override base URL của VC Creator Admin API. Mặc định `https://vcreator-admin-api.koc.com.vn`. |
 | `SUPABASE_URL` | Có (để dùng sync/lịch sử) | Project URL của Supabase, ở Project Settings → API. |
 | `SUPABASE_SERVICE_KEY` | Có (để dùng sync/lịch sử) | **Service role key** (không phải `anon` key) - chỉ dùng server-side, không thêm tiền tố `NEXT_PUBLIC_`. |
+| `VC_STAFF_EMAIL` | Chỉ ở máy chạy sync | Email tài khoản VC để sync tự đăng nhập. Phải là tài khoản **`isRoot: true`** (xem bên dưới). **Không cần** set trên Vercel. |
+| `VC_STAFF_PASSWORD` | Chỉ ở máy chạy sync | Mật khẩu tài khoản VC. **Không cần** set trên Vercel. |
 
-Token gọi VC API (JWT) **không** cấu hình qua env — mỗi người dùng tự dán token cá nhân vào ô "Token API" trên dashboard, token lưu ở `localStorage` của trình duyệt (key `vc-token`), không gửi lên server ngoài proxy nội bộ.
+> **Tài khoản sync bắt buộc phải có `isRoot: true`.** Tài khoản thường (`isRoot: false`) đọc được `/contents` và `/users` (danh sách) nhưng bị **401 "Bạn không có quyền!"** ở `/users/<id>` - tức không lấy được profile creator (SĐT, hợp đồng, banned, thống kê tiền). Danh sách `/users` có `banned`/`statistic`/`contract` nhưng thiếu `phone`/`email`/`info`/`lastActivatedAt`, nên không thay thế được. Sync sẽ **dừng và báo lỗi rõ** nếu tài khoản thiếu quyền, không âm thầm bỏ qua.
+
+## Kiến trúc: ai gọi VC API?
+
+Đây là điểm quan trọng nhất của dự án:
+
+> **Chỉ có sync gọi VC API. Dashboard KHÔNG bao giờ gọi.**
+
+Lý do: VC API (kể cả endpoint đăng nhập `/staffs/login`) chỉ nhận IP đã whitelist hoặc khi bật VPN. Người xem dashboard không có VPN, và IP của Vercel thì động nên không whitelist được. Vì vậy:
+
+| Thành phần | Chạy ở đâu | Gọi VC API? | Cần VPN? |
+| --- | --- | --- | --- |
+| Sync (`npm run sync`) | Máy local của Việt Anh | Có - tự đăng nhập | **Có** |
+| Dashboard (Next.js) | Vercel | Không - chỉ đọc Supabase | Không |
+
+Sync cào **toàn bộ** dữ liệu (video + profile creator đầy đủ: SĐT, hợp đồng, banned, thống kê tiền, kênh TikTok đã resolve) vào Supabase. Dashboard chỉ đọc Supabase và lo phần phân tích/insight. Nhờ vậy ai cũng xem được dashboard mà không cần token hay VPN.
+
+### Token gọi VC API (JWT)
+
+Không còn phải dán token tay nữa. Token VC sống vài tiếng và không có refresh token, nên `lib/vcAuth.ts` tự đăng nhập bằng `VC_STAFF_EMAIL`/`VC_STAFF_PASSWORD` và tự lấy token mới khi sắp hết hạn.
+
+Cú pháp: `npm run sync -- [số-ngày] [--refresh-creators] [--token=<jwt>]`. Token là **flag** `--token=`, không phải tham số vị trí — tham số vị trí duy nhất là số ngày. Chỉ dùng `--token` khi cần debug bằng token dán tay.
+
+## Tự động cào dữ liệu hàng ngày
+
+`scripts/daily-sync.sh` + launchd lo việc này. launchd gọi script mỗi 30 phút, script tự quyết định:
+
+- Hôm nay cào xong rồi → thoát ngay.
+- Chưa cào, VPN đang tắt → thoát im lặng, 30 phút sau thử lại.
+- Chưa cào, VPN đang bật → cào đầy đủ rồi đánh dấu xong.
+
+Nghĩa là **hôm nào bật VPN lúc nào thì nó cào lúc đó**, đúng 1 lần/ngày - không cần nhớ hẹn giờ.
+
+Cài đặt:
+
+```bash
+cp scripts/com.vietanh.vcd-sync.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.vietanh.vcd-sync.plist
+```
+
+Xem log: `tail -f sync.log`. Chạy thử ngay: `launchctl start com.vietanh.vcd-sync`.
+Gỡ: `launchctl unload ~/Library/LaunchAgents/com.vietanh.vcd-sync.plist`.
+
+Ép cào lại trong ngày (khi đã đánh dấu xong): `rm .sync-state`.
 
 ## Thiết lập Supabase (lưu lịch sử snapshot)
 

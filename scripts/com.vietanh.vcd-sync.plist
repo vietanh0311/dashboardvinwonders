@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd job: gọi scripts/daily-sync.sh mỗi 30 phút. Bản thân script tự quyết
+  định có cào hay không (hôm nay cào rồi thì thoát ngay), nên chạy 30 phút/lần
+  gần như không tốn gì mà lại bắt được đúng lúc Việt Anh bật VPN.
+
+  Cài:   cp scripts/com.vietanh.vcd-sync.plist ~/Library/LaunchAgents/
+         launchctl load ~/Library/LaunchAgents/com.vietanh.vcd-sync.plist
+  Gỡ:    launchctl unload ~/Library/LaunchAgents/com.vietanh.vcd-sync.plist
+  Chạy thử ngay: launchctl start com.vietanh.vcd-sync
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.vietanh.vcd-sync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/VietAnh/vcd-clean/scripts/daily-sync.sh</string>
+  </array>
+
+  <!-- Mỗi 30 phút. Script tự bỏ qua nếu hôm nay đã cào xong. -->
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
+  <!-- Chạy luôn 1 lần khi load/đăng nhập máy, không đợi hết 30 phút. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Lỗi bất thường của chính launchd (không phải log của sync). -->
+  <key>StandardErrorPath</key>
+  <string>/Users/VietAnh/vcd-clean/sync-launchd.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/VietAnh/vcd-clean</string>
+</dict>
+</plist>

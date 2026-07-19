@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
 import CpvRankingPanel from "@/components/CpvRankingPanel";
@@ -29,14 +29,10 @@ import {
   computeUnitComparison,
   countVnWeeksInRange,
   daysSince,
-  extractChannelSync,
   fetchContentsSmart,
   fetchCreatorProfilesFromSupabase,
-  fetchUserProfiles,
   filterContentItems,
   generateCreatorInsights,
-  resolveShortLinks,
-  VcApiError,
   vnDaysAgo,
   vnToday,
   type ContentFilters as ContentFiltersValue,
@@ -45,23 +41,14 @@ import {
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
-import { getErrorMessage } from "@/lib/errorMessage";
 
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
 }
 
-type ProfileProgress = { done: number; total: number };
-
 export default function CreatorsPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [filters, setFilters] = useState<ContentFiltersValue>({});
-
-  const [userProfiles, setUserProfiles] = useState<Map<string, UserDetail>>(new Map());
-  const [channelVersion, setChannelVersion] = useState(0); // bump để buộc tính lại kênh sau khi resolve short-link
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [profileProgress, setProfileProgress] = useState<ProfileProgress | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
 
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
 
@@ -79,19 +66,14 @@ export default function CreatorsPage() {
     fetchContentsSmart(previousFrom, previousTo, false)
   );
 
-  // Tự nạp "cache mỏng" creators (email/phone/thành phố/kênh liên kết/hợp
-  // đồng) - nhanh, không cần token. Nút "Tải profile" (live, cần token) vẫn
-  // dùng được để lấy đầy đủ hơn (ngày sinh, banned, thống kê tiền...).
+  // Profile creator đến TỪ Supabase, do sync ở máy local cào sẵn về (sync tự
+  // đăng nhập VC API - xem lib/vcAuth.ts). Trình duyệt không gọi VC API nữa:
+  // API đó chỉ nhận IP whitelist/VPN nên người xem dashboard không gọi được.
   const supabaseCreators = useSWR("vc-creators-supabase", fetchCreatorProfilesFromSupabase);
-  useEffect(() => {
-    if (!supabaseCreators.data) return;
-    setUserProfiles((prev) => {
-      const merged = new Map(supabaseCreators.data);
-      prev.forEach((v, k) => merged.set(k, v)); // profile live (đầy đủ hơn) ghi đè bản Supabase
-      return merged;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseCreators.data]);
+  const userProfiles = useMemo(
+    () => supabaseCreators.data ?? new Map<string, UserDetail>(),
+    [supabaseCreators.data]
+  );
 
   // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
   // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
@@ -186,66 +168,13 @@ export default function CreatorsPage() {
       map.set(creatorId, computeCreatorChannelsSummary(items, userProfiles.get(creatorId) ?? null));
     });
     return map;
-    // channelVersion không được đọc trực tiếp nhưng cần trong deps để buộc
-    // tính lại sau khi resolveShortLinks cập nhật cache trong localStorage.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsByCreator, userProfiles, channelVersion]);
+  }, [itemsByCreator, userProfiles]);
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
 
   const refresh = () => {
     current.mutate();
     previous.mutate();
-  };
-
-  // Chỉ tải profile (và resolve link video) cho các creator đang hiển thị
-  // trong bảng sau khi áp cờ lọc nhanh - tránh gọi hàng nghìn request không
-  // cần thiết mỗi lần mở trang.
-  const handleLoadProfiles = async () => {
-    if (loadingProfiles || filteredCreators.length === 0) return;
-    setLoadingProfiles(true);
-    setProfileError(null);
-    try {
-      const ids = Array.from(new Set(filteredCreators.map((c) => c.creatorId)));
-      const idSet = new Set(ids);
-      const shortLinkItems = currentItems.filter((it) => {
-        const id = it.createdBy?._id;
-        if (!id || !idSet.has(id)) return false;
-        return extractChannelSync(it.link, it.source).needsResolve;
-      });
-
-      const totalSteps = ids.length + shortLinkItems.length;
-      setProfileProgress({ done: 0, total: totalSteps });
-
-      const profiles = await fetchUserProfiles(ids, {
-        concurrency: 5,
-        onEach: (done) => setProfileProgress({ done, total: totalSteps }),
-      });
-      setUserProfiles((prev) => {
-        const merged = new Map(prev);
-        profiles.forEach((v, k) => merged.set(k, v));
-        return merged;
-      });
-
-      await resolveShortLinks(shortLinkItems, {
-        concurrency: 4,
-        onEach: (done) => setProfileProgress({ done: ids.length + done, total: totalSteps }),
-      });
-      setChannelVersion((v) => v + 1);
-    } catch (err) {
-      // fetchUserProfiles chỉ throw khi lỗi token (401/403) - các lỗi lẻ tẻ
-      // từng user đã được bỏ qua bên trong. Hiện message rõ thay vì fail im lặng.
-      if (err instanceof VcApiError && (err.status === 401 || err.status === 403)) {
-        setProfileError(
-          "Không tải được profile: token API thiếu hoặc hết hạn. Cần cập nhật VC_API_TOKEN trên server (liên hệ Việt Anh)."
-        );
-      } else {
-        setProfileError(getErrorMessage(err));
-      }
-    } finally {
-      setLoadingProfiles(false);
-      setProfileProgress(null);
-    }
   };
 
   const selectedCreator = creatorsWithTier.find((c) => c.creatorId === selectedCreatorId) ?? null;
@@ -324,43 +253,8 @@ export default function CreatorsPage() {
               />
               Không hoạt động &gt; 30 ngày
             </label>
-            <span className="text-xs text-gray-400">(chỉ tính trên creator đã tải profile)</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {profileProgress && (
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-32 overflow-hidden rounded-full bg-emerald-100">
-                  <div
-                    className="h-full bg-emerald-600 transition-all"
-                    style={{
-                      width: `${
-                        profileProgress.total > 0 ? (profileProgress.done / profileProgress.total) * 100 : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-                <span className="whitespace-nowrap text-xs text-gray-400">
-                  {profileProgress.done}/{profileProgress.total}
-                </span>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleLoadProfiles}
-              disabled={loadingProfiles || filteredCreators.length === 0}
-              className="whitespace-nowrap rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 disabled:opacity-50"
-            >
-              {loadingProfiles ? "Đang tải profile..." : `Tải profile (${filteredCreators.length})`}
-            </button>
           </div>
         </div>
-
-        {profileError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {profileError}
-          </div>
-        )}
 
         <CreatorTable
           data={filteredCreators}
@@ -388,7 +282,7 @@ export default function CreatorsPage() {
         <CreatorDrawer
           creator={selectedCreator}
           profile={userProfiles.get(selectedCreator.creatorId)}
-          isLoadingProfile={loadingProfiles && !userProfiles.get(selectedCreator.creatorId)}
+          isLoadingProfile={!supabaseCreators.data && !userProfiles.get(selectedCreator.creatorId)}
           channels={channelSummaries.get(selectedCreator.creatorId)}
           videos={selectedVideos}
           onClose={() => setSelectedCreatorId(null)}

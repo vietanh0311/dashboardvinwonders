@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "sync": "tsx --env-file=.env.local scripts/sync.ts"
+    "sync": "tsx --env-file=.env.local scripts/sync.ts",
+    "verify-login": "tsx --env-file=.env.local scripts/verify-vc-login.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

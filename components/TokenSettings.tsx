@@ -22,7 +22,9 @@ const STATUS_BADGE: Record<TokenStatus, string> = {
   unknown: "bg-gray-100 text-gray-500",
 };
 
-const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000; // < 24h coi là sắp hết hạn
+// Token VC chỉ sống vài tiếng, nên ngưỡng 24h sẽ khiến mọi token vừa dán đã
+// hiện "sắp hết hạn" - vô nghĩa. 30 phút mới thực sự là lúc cần lấy token mới.
+const EXPIRING_SOON_MS = 30 * 60 * 1000;
 
 export function getTokenStatus(token: string, expiry: Date | null): TokenStatus {
   if (!token) return "none";
