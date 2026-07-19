@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ContentItem } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { createLruCache } from "@/lib/routeCache";
 import { SupabaseConfigError } from "@/lib/supabase";
 import { fetchLatestSnapshotMeta, fetchLatestVideosByPublishedRange } from "@/lib/supabaseData";
 
@@ -15,27 +16,7 @@ export const dynamic = "force-dynamic";
 // chắn chính chống lỗi "statement timeout" từ Supabase: mỗi khoảng ngày chỉ
 // đánh 1 query nặng/lần sync (cho mỗi server instance) thay vì mỗi lượt xem.
 // Giới hạn 4 khoảng ngày gần nhất (LRU) để không phình bộ nhớ serverless.
-const CACHE_MAX_ENTRIES = 4;
-const contentsCache = new Map<string, ContentItem[]>();
-
-function cacheGet(key: string): ContentItem[] | undefined {
-  const hit = contentsCache.get(key);
-  if (hit) {
-    // refresh vị trí LRU
-    contentsCache.delete(key);
-    contentsCache.set(key, hit);
-  }
-  return hit;
-}
-
-function cacheSet(key: string, value: ContentItem[]) {
-  contentsCache.set(key, value);
-  while (contentsCache.size > CACHE_MAX_ENTRIES) {
-    const oldest = contentsCache.keys().next().value;
-    if (oldest === undefined) break;
-    contentsCache.delete(oldest);
-  }
-}
+const contentsCache = createLruCache<ContentItem[]>(4);
 
 export async function GET(request: NextRequest) {
   const from = request.nextUrl.searchParams.get("from");
@@ -52,13 +33,13 @@ export async function GET(request: NextRequest) {
     const meta = await fetchLatestSnapshotMeta();
     const cacheKey = `${from}|${to}|${event ?? ""}|${meta?.syncedAt ?? "no-sync"}`;
 
-    const cached = cacheGet(cacheKey);
+    const cached = contentsCache.get(cacheKey);
     if (cached) {
       return NextResponse.json({ data: cached });
     }
 
     const data = await fetchLatestVideosByPublishedRange(from, to, event ? { eventId: event } : undefined);
-    cacheSet(cacheKey, data);
+    contentsCache.set(cacheKey, data);
     return NextResponse.json({ data });
   } catch (err) {
     if (err instanceof SupabaseConfigError) {

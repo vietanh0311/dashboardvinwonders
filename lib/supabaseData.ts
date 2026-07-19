@@ -328,6 +328,48 @@ export async function fetchLatestVideosByPublishedRange(
   return ((data ?? []) as VideoRow[]).map(videoRowToContentItem);
 }
 
+export type CreatorIdsInRangeFilters = {
+  source?: string;
+  eventName?: string;
+  tagName?: string;
+  workplaceUnit?: string;
+};
+
+// Danh sách creator_id duy nhất đã đăng video trong khoảng ngày - dùng cho khối
+// so sánh "creator mới/quay lại" ở /creators (kỳ 30 ngày trước kỳ đang xem).
+// Nhẹ hơn nhiều so với fetchLatestVideosByPublishedRange: SQL function
+// (videos_creator_ids_in_range_json, xem supabase-schema.sql) SELECT DISTINCT
+// creator_id ngay trong DB, trả về vài trăm dòng thay vì hàng chục nghìn dòng
+// video đầy đủ - kỳ so sánh chỉ cần đúng 1 trường này, không cần title/tags/
+// thống kê của từng video.
+export async function fetchCreatorIdsInRange(
+  fromDate: string,
+  toDate: string,
+  filters: CreatorIdsInRangeFilters = {}
+): Promise<string[]> {
+  const supabase = getSupabaseAdmin();
+  const fromAt = vnDayStartToUtcIso(fromDate);
+  const toAt = vnDayEndToUtcIso(toDate);
+
+  const run = () =>
+    supabase.rpc("videos_creator_ids_in_range_json", {
+      from_at: fromAt,
+      to_at: toAt,
+      p_source: filters.source ?? null,
+      p_event_name: filters.eventName ?? null,
+      p_tag_name: filters.tagName ?? null,
+      p_workplace_unit: filters.workplaceUnit ?? null,
+    });
+
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
+  if (error) throw error;
+
+  return (data ?? []) as string[];
+}
+
 export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
   const supabase = getSupabaseAdmin();
   // order theo khóa chính để thứ tự ổn định giữa các trang tải song song -

@@ -1277,12 +1277,9 @@ export type WeeklyCreatorTrend = {
 
 export function computeNewVsReturning(
   currentItems: ContentItem[],
-  previousWindowItems: ContentItem[]
+  previousWindowCreatorIds: Set<string>
 ): WeeklyCreatorTrend[] {
-  const seen = new Set<string>();
-  previousWindowItems.forEach((it) => {
-    if (it.createdBy?._id) seen.add(it.createdBy._id);
-  });
+  const seen = new Set(previousWindowCreatorIds);
 
   const byWeek = new Map<string, ContentItem[]>();
   const sortedItems = [...currentItems].sort((a, b) => (a.publishedAt < b.publishedAt ? -1 : 1));
@@ -1344,12 +1341,9 @@ const TIER_ORDER: CreatorTier[] = ["star", "stable", "one_hit", "needs_activatio
 
 export function computeTierBreakdown(
   creators: CreatorWithTier[],
-  previousWindowItems: ContentItem[]
+  previousWindowCreatorIds: Set<string>
 ): TierBreakdownRow[] {
-  const seenBefore = new Set<string>();
-  previousWindowItems.forEach((it) => {
-    if (it.createdBy?._id) seenBefore.add(it.createdBy._id);
-  });
+  const seenBefore = previousWindowCreatorIds;
 
   const totalCreators = creators.length;
   const totalViews = creators.reduce((sum, c) => sum + c.totalViews, 0);
@@ -2399,6 +2393,25 @@ export async function fetchContentsFromSupabase(
   if (options.event) search.set("event", options.event);
   const res = await jsonFetch<{ data: ContentItem[] }>(`/api/data/contents?${search.toString()}`);
   return res?.data ?? [];
+}
+
+// Đọc danh sách creator_id đã đăng video trong khoảng ngày qua route nội bộ
+// /api/data/creator-ids - nhẹ hơn nhiều so với fetchContentsFromSupabase (chỉ
+// trả creator_id, không kéo cả video). Dùng cho khối so sánh "creator mới/quay
+// lại" ở /creators (kỳ 30 ngày trước kỳ đang xem) - kỳ đó chỉ cần biết ai đã
+// từng đăng, không cần chi tiết từng video.
+export async function fetchCreatorIdsInRangeFromSupabase(
+  fromDate: string,
+  toDate: string,
+  filters: ContentFilters = {}
+): Promise<Set<string>> {
+  const search = new URLSearchParams({ from: fromDate, to: toDate });
+  if (filters.source) search.set("source", filters.source);
+  if (filters.eventName) search.set("event", filters.eventName);
+  if (filters.tagName) search.set("tag", filters.tagName);
+  if (filters.workplaceUnit) search.set("unit", filters.workplaceUnit);
+  const res = await jsonFetch<{ data: string[] }>(`/api/data/creator-ids?${search.toString()}`);
+  return new Set(res?.data ?? []);
 }
 
 // Đọc danh sách event đã sync trong Supabase qua route nội bộ /api/data/events

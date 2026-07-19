@@ -30,6 +30,7 @@ import {
   countVnWeeksInRange,
   daysSince,
   fetchContentsSmart,
+  fetchCreatorIdsInRangeFromSupabase,
   fetchCreatorProfilesFromSupabase,
   filterContentItems,
   generateCreatorInsights,
@@ -45,6 +46,10 @@ import {
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
 }
+
+// Tham chiếu ổn định cho lúc previous.data chưa tải xong - tránh tạo Set mới
+// mỗi render (sẽ làm vô hiệu memo hoá của weeklyTrend/tierBreakdown bên dưới).
+const EMPTY_CREATOR_IDS = new Set<string>();
 
 export default function CreatorsPage() {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
@@ -62,8 +67,13 @@ export default function CreatorsPage() {
 
   const previousFrom = addDaysToVnDate(range.from, -30);
   const previousTo = addDaysToVnDate(range.from, -1);
-  const previous = useSWR(["vc-contents-creators-prev", previousFrom, previousTo], () =>
-    fetchContentsSmart(previousFrom, previousTo, false)
+  // Chỉ cần biết AI đã đăng trong 30 ngày trước (để tính creator mới/quay
+  // lại), không cần chi tiết từng video - fetchCreatorIdsInRangeFromSupabase
+  // trả về vài trăm creator_id thay vì hàng chục nghìn dòng video đầy đủ như
+  // fetchContentsSmart, xem lib/api.ts.
+  const previous = useSWR(
+    ["vc-creator-ids-creators-prev", previousFrom, previousTo, filters],
+    () => fetchCreatorIdsInRangeFromSupabase(previousFrom, previousTo, filters)
   );
 
   // Profile creator đến TỪ Supabase, do sync ở máy local cào sẵn về (sync tự
@@ -77,19 +87,27 @@ export default function CreatorsPage() {
 
   // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
   // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
-  const isLoading = !current.data || !previous.data;
+  //
+  // Chỉ chặn UI chính theo current - previous (30 ngày trước kỳ đang xem) luôn
+  // nặng hơn current (cửa sổ cố định 30 ngày, hầu như không bao giờ trúng cache
+  // vì previousFrom/previousTo đổi theo range.from) và chỉ phục vụ 2 khối so
+  // sánh bên dưới (NewReturningChart, TierBreakdownTable). Trước đây gộp
+  // isLoading = !current.data || !previous.data khiến cả bảng xếp hạng creator
+  // phải đợi thêm request 30 ngày đó dù không cần tới nó - đây chính là lý do
+  // đổi date filter cảm giác rất chậm.
+  const isLoading = !current.data;
+  const isLoadingCompare = isLoading || !previous.data;
   const isValidating = current.isValidating || previous.isValidating;
   const error = current.error ?? previous.error;
   // Đang tải range mới nhưng màn hình vẫn là số liệu cũ - bật thanh tiến trình
   // + làm mờ nội dung để người dùng biết dữ liệu đang cập nhật, không phải đơ.
-  const isRefreshing = isValidating && !isLoading;
+  // Chỉ theo current.isValidating (không gộp previous) - nội dung chính không
+  // nên còn mờ chỉ vì request so sánh 30 ngày (chạy nền, không chặn) chưa xong.
+  const isRefreshing = current.isValidating && !isLoading;
 
   const rawCurrentItems = useMemo(() => current.data ?? [], [current.data]);
   const currentItems = useMemo(() => filterContentItems(rawCurrentItems, filters), [rawCurrentItems, filters]);
-  const previousItems = useMemo(
-    () => filterContentItems(previous.data ?? [], filters),
-    [previous.data, filters]
-  );
+  const previousCreatorIds = previous.data ?? EMPTY_CREATOR_IDS;
 
   const weeksInRange = countVnWeeksInRange(range.from, range.to);
 
@@ -106,13 +124,13 @@ export default function CreatorsPage() {
   const pareto = useMemo(() => computeParetoAnalysis(creatorsWithTier), [creatorsWithTier]);
 
   const weeklyTrend = useMemo(
-    () => computeNewVsReturning(currentItems, previousItems),
-    [currentItems, previousItems]
+    () => computeNewVsReturning(currentItems, previousCreatorIds),
+    [currentItems, previousCreatorIds]
   );
 
   const tierBreakdown = useMemo(
-    () => computeTierBreakdown(creatorsWithTier, previousItems),
-    [creatorsWithTier, previousItems]
+    () => computeTierBreakdown(creatorsWithTier, previousCreatorIds),
+    [creatorsWithTier, previousCreatorIds]
   );
 
   const unitComparison = useMemo(() => computeUnitComparison(creatorsWithTier), [creatorsWithTier]);
@@ -266,11 +284,11 @@ export default function CreatorsPage() {
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <ParetoChart isLoading={isLoading} pareto={pareto} />
-          <NewReturningChart isLoading={isLoading} data={weeklyTrend} />
+          <NewReturningChart isLoading={isLoadingCompare} data={weeklyTrend} />
         </div>
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <TierBreakdownTable isLoading={isLoading} data={tierBreakdown} />
+          <TierBreakdownTable isLoading={isLoadingCompare} data={tierBreakdown} />
           <UnitComparisonTable isLoading={isLoading} data={unitComparison} />
         </div>
 
