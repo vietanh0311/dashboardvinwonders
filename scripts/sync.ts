@@ -10,11 +10,19 @@
 // Mặc định cào 90 ngày gần nhất - video/creator đã có sẵn trong DB được bỏ qua
 // ở bước resolve kênh/tải profile nên các lần chạy sau không bị chậm lại.
 //
+// Creator KHÔNG chỉ được suy ra từ createdBy của video trong cửa sổ ngày đang
+// sync, mà còn cào thêm TOÀN BỘ user đã đăng ký dưới partner VinWonders qua
+// fetchAllUsersServer (endpoint danh sách /users) - nhờ vậy user đã đăng ký
+// nhưng chưa từng đăng video (hoặc video nằm ngoài cửa sổ ngày) vẫn có mặt
+// trong bảng creators. Đây là điều kiện để phân biệt creator "mới" (thật sự
+// mới) và "cũ" (đã có tên trong hệ thống, chỉ là chưa đăng video) chính xác.
+//
 // --refresh-creators: tải lại profile đầy đủ (SĐT, trạng thái xác minh SĐT,
-// tên hợp đồng...) cho TẤT CẢ creator xuất hiện trong cửa sổ ngày đang sync,
-// kể cả creator đã có sẵn trong DB (mặc định các creator này bị bỏ qua để
-// chạy nhanh). Dùng khi cần cập nhật lại thông tin creator đã cũ - chạy chậm
-// hơn hẳn vì gọi lại API thật cho từng creator.
+// tên hợp đồng...) cho TẤT CẢ creator xuất hiện trong cửa sổ ngày đang sync
+// CỘNG toàn bộ user từ danh sách /users, kể cả creator đã có sẵn trong DB
+// (mặc định các creator này bị bỏ qua để chạy nhanh). Dùng khi cần cập nhật
+// lại thông tin creator đã cũ - chạy chậm hơn hẳn vì gọi lại API thật cho
+// từng creator.
 
 import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type ContentItem } from "../lib/api";
 import { resolveTikTokLink } from "../lib/linkResolver";
@@ -31,7 +39,7 @@ import {
   type CreatorRow,
 } from "../lib/supabaseData";
 import { getCachedTokenExpiry, getVcToken } from "../lib/vcAuth";
-import { fetchContentsRangeServer, fetchUserDetailServer, VcServerError } from "../lib/vcServer";
+import { fetchAllUsersServer, fetchContentsRangeServer, fetchUserDetailServer, VcServerError } from "../lib/vcServer";
 
 const DEFAULT_SYNC_WINDOW_DAYS = 90;
 
@@ -79,6 +87,11 @@ async function main() {
   const items: ContentItem[] = await fetchContentsRangeServer(token, fromDate, toDate);
   console.log(`Đã tải ${items.length} video.`);
 
+  console.log("Đang tải danh sách toàn bộ user VinWonders (kể cả user chưa từng đăng video)...");
+  const allUsers = await fetchAllUsersServer(token);
+  const userListById = new Map(allUsers.filter((u) => !!u._id).map((u) => [u._id, u]));
+  console.log(`Đã tải ${allUsers.length} user.`);
+
   const existingChannelMap = await fetchExistingChannelMap(items.map((it) => it._id));
   const newVideoIds = new Set(items.map((it) => it._id).filter((id) => !existingChannelMap.has(id)));
 
@@ -110,7 +123,11 @@ async function main() {
     }
   });
 
-  const creatorIds = Array.from(new Set(items.map((it) => it.createdBy?._id).filter((id): id is string => !!id)));
+  // Hợp nhất 2 nguồn creatorId: từ video trong cửa sổ ngày đang sync (như cũ)
+  // VÀ từ toàn bộ danh sách /users (để không bỏ sót user chưa từng đăng video).
+  const videoCreatorIds = items.map((it) => it.createdBy?._id).filter((id): id is string => !!id);
+  const userListIds = Array.from(userListById.keys());
+  const creatorIds = Array.from(new Set([...videoCreatorIds, ...userListIds]));
   const existingCreatorIds = await fetchExistingCreatorIds(creatorIds);
   const creatorIdsToFetch = refreshCreators ? creatorIds : creatorIds.filter((id) => !existingCreatorIds.has(id));
 
@@ -133,8 +150,11 @@ async function main() {
     if (authError) return; // đã biết lỗi quyền - khỏi thử tiếp
     try {
       const profile = await fetchUserDetailServer(token, creatorId);
+      // Ưu tiên tên/hashtag từ video (đã có sẵn workplaceUnitName kèm theo);
+      // user chưa từng đăng video thì dùng chính bản ghi trong danh sách /users.
       const fallbackItem = items.find((it) => it.createdBy?._id === creatorId);
-      creatorRows.push(userDetailToCreatorRow(creatorId, profile, fallbackItem?.createdBy));
+      const fallback = fallbackItem?.createdBy ?? userListById.get(creatorId);
+      creatorRows.push(userDetailToCreatorRow(creatorId, profile, fallback));
     } catch (err) {
       if (err instanceof VcServerError && (err.status === 401 || err.status === 403)) {
         authError = authError ?? err;
@@ -190,8 +210,9 @@ async function main() {
 
   console.log("");
   console.log(
-    `✓ Xong: ${items.length} video (${newVideoIds.size} mới), ${creatorRows.length} creator ` +
-      `${refreshCreators ? "đã tải lại" : "mới"}, ${((Date.now() - startedAt) / 1000).toFixed(1)}s, synced lúc ${syncedAt}.`
+    `✓ Xong: ${items.length} video (${newVideoIds.size} mới), ${allUsers.length} user VinWonders (danh sách), ` +
+      `${creatorRows.length} creator ${refreshCreators ? "đã tải lại" : "mới"}, ` +
+      `${((Date.now() - startedAt) / 1000).toFixed(1)}s, synced lúc ${syncedAt}.`
   );
 }
 

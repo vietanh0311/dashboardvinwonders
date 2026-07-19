@@ -129,3 +129,44 @@ export async function fetchUserDetailServer(token: string, userId: string): Prom
   const res = await vcServerFetch(`users/${userId}`, token);
   return unwrapOne<UserDetail>(res);
 }
+
+// Cào TOÀN BỘ user đã đăng ký dưới partner VinWonders qua endpoint danh sách
+// GET /users (khác /users/<id> ở trên - đây là danh sách, phân trang giống hệt
+// fetchContentsRangeServer). Khác với suy creator từ createdBy của video (bỏ
+// sót user đã đăng ký nhưng chưa từng đăng video), endpoint này cho danh sách
+// đầy đủ nên dùng làm nguồn creatorId bổ sung khi sync (xem scripts/sync.ts).
+//
+// LƯU Ý: shape response chưa được kiểm chứng bằng dữ liệu thật (chỉ mới xác
+// nhận endpoint tồn tại và trả banned/statistic/contract, xem README) - hàm
+// tự log 1 bản ghi mẫu ra console ở lần chạy đầu để đối chiếu field, chỉnh lại
+// unwrap()/mapping nếu shape khác giả định.
+export async function fetchAllUsersServer(token: string): Promise<UserDetail[]> {
+  const limit = 500;
+
+  const users: UserDetail[] = [];
+  let page = 0;
+  let total = Infinity;
+  let loggedSample = false;
+
+  while (page * limit < total) {
+    const res = await vcServerFetch("users", token, {
+      page,
+      limit,
+      partner: VINWONDERS_PARTNER_ID,
+    });
+
+    const { items: chunk, total: totalFromRes } = unwrap<UserDetail>(res);
+    total = totalFromRes > 0 ? totalFromRes : chunk.length;
+
+    if (!loggedSample && chunk.length > 0) {
+      console.log("[fetchAllUsersServer] bản ghi mẫu đầu tiên (đối chiếu field):", JSON.stringify(chunk[0]));
+      loggedSample = true;
+    }
+
+    users.push(...chunk);
+    if (chunk.length === 0) break;
+    page += 1;
+  }
+
+  return users;
+}
