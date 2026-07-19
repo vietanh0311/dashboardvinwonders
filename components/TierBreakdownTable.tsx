@@ -1,11 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
+import CopyTableButton from "@/components/CopyTableButton";
 import { formatNumber, formatPercent, type CreatorTier, type TierBreakdownRow } from "@/lib/api";
 
 type Props = {
   isLoading: boolean;
   data: TierBreakdownRow[];
 };
+
+const COPY_HEADERS = ["Tier", "Creator", "% Creator", "% Views", "Views TB/video", "% quay lại", "Creator quay lại"];
 
 const TIER_DOT: Record<CreatorTier, string> = {
   star: "bg-amber-500",
@@ -16,9 +20,26 @@ const TIER_DOT: Record<CreatorTier, string> = {
 };
 
 export default function TierBreakdownTable({ isLoading, data }: Props) {
+  const copyRows = useMemo(
+    () =>
+      data.map((row) => [
+        row.label,
+        row.creators,
+        `${row.creatorsPct.toFixed(2)}%`,
+        `${row.viewsPct.toFixed(2)}%`,
+        Math.round(row.avgViewsPerVideo),
+        `${row.retentionPct.toFixed(2)}%`,
+        row.returningCreators,
+      ]),
+    [data]
+  );
+
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-gray-800">Phân bổ creator theo tier</h3>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-800">Phân bổ creator theo tier</h3>
+        <CopyTableButton headers={COPY_HEADERS} rows={copyRows} />
+      </div>
       <p className="mb-3 text-xs text-gray-400">
         % quay lại = trong số creator của tier này, bao nhiêu % đã hoạt động ở kỳ 30 ngày trước đó.
       </p>

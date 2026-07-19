@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import CampaignLifecycleChart from "@/components/CampaignLifecycleChart";
 import CampaignTable from "@/components/CampaignTable";
+import CampaignTopCreatorsTable from "@/components/CampaignTopCreatorsTable";
 import ContentFilters from "@/components/ContentFilters";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
@@ -148,6 +149,8 @@ export default function CampaignsPage() {
           <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
 
           <CampaignTable isLoading={isLoading} data={campaignStats} />
+
+          <CampaignTopCreatorsTable />
 
           <CampaignLifecycleChart
             events={eventsList.data ?? []}

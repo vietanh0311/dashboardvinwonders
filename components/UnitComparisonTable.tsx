@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import CopyTableButton from "@/components/CopyTableButton";
 import { formatCurrency, formatNumber, type UnitComparisonRow } from "@/lib/api";
 
 type Props = {
   isLoading: boolean;
   data: UnitComparisonRow[];
 };
+
+const COPY_HEADERS = ["Cơ sở", "Creator", "Videos", "Views", "Views TB/video", "Cash", "CPV"];
 
 type SortKey = "creators" | "videos" | "totalViews" | "avgViewsPerVideo" | "totalCash" | "cpv";
 
@@ -41,9 +44,26 @@ export default function UnitComparisonTable({ isLoading, data }: Props) {
     }
   };
 
+  const copyRows = useMemo(
+    () =>
+      sorted.map((row) => [
+        row.unitName,
+        row.creators,
+        row.videos,
+        Math.round(row.totalViews),
+        Math.round(row.avgViewsPerVideo),
+        Math.round(row.totalCash),
+        Number(row.cpv.toFixed(2)),
+      ]),
+    [sorted]
+  );
+
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-gray-800">So sánh hiệu quả theo cơ sở</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-800">So sánh hiệu quả theo cơ sở</h3>
+        <CopyTableButton headers={COPY_HEADERS} rows={copyRows} />
+      </div>
 
       {isLoading ? (
         <div className="space-y-2">

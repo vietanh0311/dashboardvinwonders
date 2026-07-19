@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import CopyTableButton from "@/components/CopyTableButton";
 import { formatNumber, formatPercent, type CreatorStat } from "@/lib/api";
 
 type Props = {
@@ -8,6 +10,7 @@ type Props = {
 };
 
 const TOP_N = 10;
+const COPY_HEADERS = ["#", "Creator", "Cơ sở", "Video", "Views", "% tổng"];
 
 // Top creator theo views trong khoảng ngày đang chọn - bản rút gọn cho màn
 // Dashboard (bảng xếp hạng đầy đủ kèm tier/pareto nằm ở trang /creators).
@@ -17,13 +20,29 @@ export default function TopCreatorsCard({ data, isLoading }: Props) {
   const totalViews = data.reduce((s, c) => s + c.totalViews, 0);
   const maxViews = top[0]?.totalViews ?? 0;
 
+  const copyRows = useMemo(
+    () =>
+      top.map((creator, index) => [
+        index + 1,
+        creator.name,
+        creator.workplaceUnitName ?? "-",
+        creator.videos,
+        Math.round(creator.totalViews),
+        totalViews > 0 ? `${((creator.totalViews / totalViews) * 100).toFixed(2)}%` : "0%",
+      ]),
+    [top, totalViews]
+  );
+
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">Top creator theo views</h3>
-        <a href="/creators" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">
-          Xem tất cả →
-        </a>
+        <div className="flex items-center gap-3">
+          <CopyTableButton headers={COPY_HEADERS} rows={copyRows} />
+          <a href="/creators" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">
+            Xem tất cả →
+          </a>
+        </div>
       </div>
 
       <div className="max-h-96 overflow-y-auto">
