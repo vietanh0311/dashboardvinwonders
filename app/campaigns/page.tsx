@@ -22,6 +22,7 @@ import {
   computeCampaignMomentum,
   computeCampaignStats,
   computePublishHeatmap,
+  computePublishHeatmapBySource,
   computeSourceComparison,
   computeTagAnalysis,
   computeViewDistribution,
@@ -79,6 +80,7 @@ export default function CampaignsPage() {
 
   const viewDist = useMemo(() => computeViewDistribution(items), [items]);
   const heatmap = useMemo(() => computePublishHeatmap(items), [items]);
+  const heatmapBySource = useMemo(() => computePublishHeatmapBySource(items), [items]);
   const sourceComparison = useMemo(() => computeSourceComparison(items), [items]);
   const campaignStats = useMemo(() => computeCampaignStats(items), [items]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(items), [items]);
@@ -144,7 +146,12 @@ export default function CampaignsPage() {
 
           <ViewDistributionPanel isLoading={isLoading} data={viewDist} />
 
-          <PublishHeatmap isLoading={isLoading} data={heatmap} />
+          <PublishHeatmap
+            isLoading={isLoading}
+            data={heatmap}
+            bySource={heatmapBySource}
+            campaignLabel={filters.eventName}
+          />
 
           <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
 
