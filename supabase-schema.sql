@@ -127,6 +127,65 @@ as $$
   from videos_latest_in_range(from_at, to_at, p_event_id) v;
 $$;
 
+-- Trả về DANH SÁCH creator_id duy nhất đã đăng video trong khoảng ngày
+-- (published_at) - dùng cho khối so sánh "creator mới/quay lại" + "% quay lại"
+-- theo tier ở /creators (kỳ so sánh cố định 30 ngày trước kỳ đang xem, xem
+-- computeNewVsReturning/computeTierBreakdown trong lib/api.ts). Trước đây
+-- trang gọi thẳng videos_latest_in_range_json cho CẢ kỳ so sánh rồi chỉ lấy
+-- creator_id ở phía client - kéo về hàng chục nghìn dòng video đầy đủ (title,
+-- tags, 5 nhóm thống kê...) chỉ để dùng đúng 1 trường, khiến kỳ so sánh luôn
+-- mất 3-5s dù kỳ đang xem đã tải xong từ lâu. Function riêng này SELECT
+-- DISTINCT creator_id ngay trong DB, trả về vài trăm dòng (số creator hoạt
+-- động trong kỳ) thay vì hàng chục nghìn dòng video.
+--
+-- Nhận thêm 4 tham số filter khớp 4 dropdown lọc content ở /creators (nguồn/sự
+-- kiện/tag/nhóm cơ sở) để kỳ so sánh vẫn lọc nhất quán với kỳ đang xem khi
+-- người dùng bật filter, thay vì luôn tính trên toàn bộ dữ liệu chưa lọc.
+create or replace function videos_creator_ids_in_range(
+  from_at timestamptz,
+  to_at timestamptz,
+  p_source text default null,
+  p_event_name text default null,
+  p_tag_name text default null,
+  p_workplace_unit text default null
+)
+returns table(creator_id text)
+language sql
+stable
+as $$
+  select distinct v.creator_id
+  from videos v
+  where v.is_latest
+    and v.published_at >= from_at
+    and v.published_at <= to_at
+    and v.creator_id is not null
+    and (p_source is null or v.source = p_source)
+    and (p_event_name is null or v.event_name = p_event_name)
+    and (p_workplace_unit is null or v.workplace_unit = p_workplace_unit)
+    and (
+      p_tag_name is null
+      or exists (select 1 from jsonb_array_elements(v.tags) t where t ->> 'name' = p_tag_name)
+    );
+$$;
+
+-- Wrapper trả jsonb (mảng string) - cùng lý do với videos_latest_in_range_json:
+-- 1 round-trip duy nhất, không dính giới hạn 1000 dòng/response của PostgREST.
+create or replace function videos_creator_ids_in_range_json(
+  from_at timestamptz,
+  to_at timestamptz,
+  p_source text default null,
+  p_event_name text default null,
+  p_tag_name text default null,
+  p_workplace_unit text default null
+)
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(jsonb_agg(creator_id), '[]'::jsonb)
+  from videos_creator_ids_in_range(from_at, to_at, p_source, p_event_name, p_tag_name, p_workplace_unit);
+$$;
+
 -- Retention cho lịch sử snapshot: bảng videos chèn ~1 dòng/video/lần sync (cửa
 -- sổ 90 ngày ~ 36k dòng/lần) nên sẽ phình ~1M dòng/tháng nếu sync hằng ngày.
 -- Giữ snapshot theo NGÀY trong keep_daily_days gần nhất (đủ cho velocity/so
