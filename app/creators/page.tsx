@@ -15,10 +15,12 @@ import InsightsPanel from "@/components/InsightsPanel";
 import DataErrorBanner from "@/components/DataErrorBanner";
 import MomentumLeaderboardCard from "@/components/MomentumLeaderboardCard";
 import Nav from "@/components/Nav";
+import OnboardingFunnelCard from "@/components/OnboardingFunnelCard";
 import PostingTimeByGroupTable from "@/components/PostingTimeByGroupTable";
 import RefreshIndicator from "@/components/RefreshIndicator";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
+import RetentionCohortTable from "@/components/RetentionCohortTable";
 import TierBreakdownTable from "@/components/TierBreakdownTable";
 import {
   addDaysToVnDate,
@@ -38,6 +40,7 @@ import {
   daysSince,
   fetchContentsSmart,
   fetchCreatorIdsInRangeFromSupabase,
+  fetchCreatorLifecycle,
   fetchCreatorProfilesFromSupabase,
   filterContentItems,
   generateCreatorInsights,
@@ -104,6 +107,10 @@ export default function CreatorsPage() {
     () => supabaseCreators.data ?? new Map<string, UserDetail>(),
     [supabaseCreators.data]
   );
+
+  // Cohort giữ chân + funnel kích hoạt dùng TOÀN BỘ lịch sử creator (không theo range đang xem) -
+  // fetch độc lập, không chặn phần còn lại của trang trong lúc tải.
+  const lifecycle = useSWR("vc-creator-lifecycle", fetchCreatorLifecycle, { revalidateOnFocus: false });
 
   // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
   // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
@@ -349,6 +356,22 @@ export default function CreatorsPage() {
         <PostingTimeByGroupTable isLoading={isLoading} byFacility={postingTimeByFacility} byTier={postingTimeByTier} />
 
         <CpvRankingPanel isLoading={isLoading} data={cpvRanking} onSelectCreator={setSelectedCreatorId} />
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <RetentionCohortTable isLoading={!lifecycle.data} data={lifecycle.data?.cohorts ?? []} />
+          <OnboardingFunnelCard
+            isLoading={!lifecycle.data}
+            data={
+              lifecycle.data?.funnel ?? {
+                totalCreators: 0,
+                reachedPost2: 0,
+                reachedPost3: 0,
+                medianDaysToPost2: null,
+                medianDaysToPost3: null,
+              }
+            }
+          />
+        </div>
         </div>
       </div>
 

@@ -3214,6 +3214,61 @@ export async function fetchTrends(windowDays = 14): Promise<TrendsResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Vòng đời creator: cohort giữ chân theo tháng đăng bài đầu tiên + funnel kích hoạt (bài #1 ->
+// #2 -> #3). Toàn bộ tính trong SQL (creator_lifecycle_json, xem supabase-migration-creator-
+// lifecycle.sql) vì cần TOÀN BỘ lịch sử creator (không giới hạn theo date range đang xem trên
+// trang) - khác các module khác ở /creators vốn tái dùng dữ liệu đã tải theo range.
+//
+// TODO: "onboarding funnel" đúng nghĩa (mời tham gia -> đăng ký -> bài đầu tiên) cần mốc ngày
+// đăng ký/tham gia chương trình, nhưng hệ thống hiện KHÔNG lưu mốc này - creator chỉ được ghi
+// nhận vào bảng creators khi sync phát hiện qua video của họ (xem upsertCreatorRows trong
+// lib/supabaseData.ts), tức là luôn SAU hoặc CÙNG lúc bài đầu tiên. fetchCreatorLifecycle() vì
+// vậy đo funnel từ bài #1 (proxy tốt nhất hiện có: tốc độ "kích hoạt" sau lần đăng đầu) thay vì
+// từ lúc gia nhập. Nếu sau này VC API bổ sung field ngày đăng ký, nên mở rộng funnel thêm bước
+// "đăng ký -> bài #1".
+// ---------------------------------------------------------------------------
+
+export type CreatorRetentionCohort = {
+  cohortMonth: string; // yyyy-MM
+  cohortSize: number;
+  retention: { monthOffset: number; activeCreators: number; retentionPct: number }[];
+};
+
+export type CreatorActivationFunnel = {
+  totalCreators: number;
+  reachedPost2: number;
+  reachedPost3: number;
+  medianDaysToPost2: number | null;
+  medianDaysToPost3: number | null;
+};
+
+export type CreatorLifecycleResult = {
+  cohorts: CreatorRetentionCohort[];
+  funnel: CreatorActivationFunnel;
+};
+
+const EMPTY_CREATOR_LIFECYCLE: CreatorLifecycleResult = {
+  cohorts: [],
+  funnel: {
+    totalCreators: 0,
+    reachedPost2: 0,
+    reachedPost3: 0,
+    medianDaysToPost2: null,
+    medianDaysToPost3: null,
+  },
+};
+
+export async function fetchCreatorLifecycle(): Promise<CreatorLifecycleResult> {
+  const res = await jsonFetch<{ data?: Partial<CreatorLifecycleResult> | null }>("/api/data/creator-lifecycle");
+  const data = res?.data;
+  if (!data) return EMPTY_CREATOR_LIFECYCLE;
+  return {
+    cohorts: Array.isArray(data.cohorts) ? data.cohorts : [],
+    funnel: data.funnel ?? EMPTY_CREATOR_LIFECYCLE.funnel,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers định dạng dùng chung cho các component
 // ---------------------------------------------------------------------------
 
