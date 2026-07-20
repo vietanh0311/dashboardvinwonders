@@ -39,3 +39,6 @@ next-env.d.ts
 .sync-lock/
 sync.log
 sync-launchd.log
+
+# graphify knowledge graph cache (local dev tool, regenerate with `graphify update .`)
+/graphify-out/

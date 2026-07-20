@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import useSWR from "swr";
+import ConcentrationRiskCard from "@/components/ConcentrationRiskCard";
 import ContentFilters from "@/components/ContentFilters";
 import CpvRankingPanel from "@/components/CpvRankingPanel";
 import CreatorDrawer from "@/components/CreatorDrawer";
@@ -11,6 +12,7 @@ import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
 import InsightsPanel from "@/components/InsightsPanel";
 import DataErrorBanner from "@/components/DataErrorBanner";
+import MomentumLeaderboardCard from "@/components/MomentumLeaderboardCard";
 import Nav from "@/components/Nav";
 import RefreshIndicator from "@/components/RefreshIndicator";
 import NewReturningChart from "@/components/NewReturningChart";
@@ -20,9 +22,11 @@ import UnitComparisonTable from "@/components/UnitComparisonTable";
 import {
   addDaysToVnDate,
   classifyCreatorTiers,
+  computeConcentrationTrend,
   computeCpvRanking,
   computeCreatorChannelsSummary,
   computeCreatorStats,
+  computeMomentumLeaderboard,
   computeNewVsReturning,
   computeParetoAnalysis,
   computeTierBreakdown,
@@ -123,6 +127,19 @@ export default function CreatorsPage() {
 
   const pareto = useMemo(() => computeParetoAnalysis(creatorsWithTier), [creatorsWithTier]);
 
+  // Stat creator của kỳ trước (cùng cửa sổ 30 ngày đã tải sẵn cho weeklyTrend bên dưới) - dùng để
+  // so sánh rủi ro phụ thuộc giữa 2 kỳ mà không cần thêm request nào.
+  const previousCreatorStats = useMemo(() => computeCreatorStats(previousItems), [previousItems]);
+  const concentrationTrend = useMemo(
+    () => computeConcentrationTrend(creatorsWithTier, previousCreatorStats),
+    [creatorsWithTier, previousCreatorStats]
+  );
+
+  const momentum = useMemo(
+    () => computeMomentumLeaderboard(creatorsWithTier, previousCreatorStats),
+    [creatorsWithTier, previousCreatorStats]
+  );
+
   const weeklyTrend = useMemo(
     () => computeNewVsReturning(currentItems, previousCreatorIds),
     [currentItems, previousCreatorIds]
@@ -138,8 +155,8 @@ export default function CreatorsPage() {
   const cpvRanking = useMemo(() => computeCpvRanking(creatorsWithTier), [creatorsWithTier]);
 
   const insights = useMemo(
-    () => generateCreatorInsights(creatorsWithTier, pareto, weeklyTrend, range.to),
-    [creatorsWithTier, pareto, weeklyTrend, range.to]
+    () => generateCreatorInsights(creatorsWithTier, pareto, weeklyTrend, range.to, concentrationTrend),
+    [creatorsWithTier, pareto, weeklyTrend, range.to, concentrationTrend]
   );
 
   // Cờ lọc nhanh - chỉ áp dụng chính xác cho creator đã tải profile; creator
@@ -240,6 +257,10 @@ export default function CreatorsPage() {
           className={`flex flex-col gap-5 transition-opacity duration-300 ${isRefreshing ? "opacity-60" : "opacity-100"}`}
         >
         <InsightsPanel isLoading={isLoading} insights={insights} />
+
+        <ConcentrationRiskCard isLoading={isLoading} trend={concentrationTrend} />
+
+        <MomentumLeaderboardCard isLoading={isLoading} data={momentum} onSelectCreator={setSelectedCreatorId} />
 
         <div className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-4 text-sm">

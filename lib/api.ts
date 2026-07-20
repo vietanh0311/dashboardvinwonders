@@ -1264,6 +1264,148 @@ export function computeParetoAnalysis(creators: CreatorStat[]): ParetoResult {
 }
 
 // ---------------------------------------------------------------------------
+// Rủi ro phụ thuộc creator: % views do top N% creator (theo views) tạo ra. Trước đây tính 1 lần,
+// inline, chỉ dùng cho 1 câu insight khi vượt 70% (xem generateCreatorInsights) - tách thành hàm
+// riêng để so sánh được giữa 2 kỳ (xem computeConcentrationTrend) mà không lặp logic.
+// ---------------------------------------------------------------------------
+
+const CONCENTRATION_TOP_PCT = 10; // khớp ngưỡng "top 10%" đã dùng trong insight gốc
+
+export type ConcentrationRisk = {
+  topCreatorPct: number; // % creator được tính (luôn = CONCENTRATION_TOP_PCT)
+  topCreatorCount: number; // số creator thực tế trong nhóm top
+  topViewSharePct: number; // % tổng views do nhóm top tạo ra - càng CAO càng phụ thuộc (magnitude)
+  creatorsFor80Pct: number; // số creator cần để đạt 80% views (từ computeParetoAnalysis)
+  creatorsFor80PctPct: number; // % creator cần để đạt 80% views - càng THẤP càng phụ thuộc (breadth)
+  totalCreators: number;
+};
+
+export function computeConcentrationRisk(creators: CreatorStat[]): ConcentrationRisk {
+  const totalCreators = creators.length;
+  const totalViews = creators.reduce((sum, c) => sum + c.totalViews, 0);
+
+  if (totalCreators === 0 || totalViews === 0) {
+    return {
+      topCreatorPct: CONCENTRATION_TOP_PCT,
+      topCreatorCount: 0,
+      topViewSharePct: 0,
+      creatorsFor80Pct: 0,
+      creatorsFor80PctPct: 0,
+      totalCreators: 0,
+    };
+  }
+
+  const sorted = [...creators].sort((a, b) => b.totalViews - a.totalViews);
+  const topCount = Math.max(1, Math.round(totalCreators * (CONCENTRATION_TOP_PCT / 100)));
+  const topViews = sorted.slice(0, topCount).reduce((sum, c) => sum + c.totalViews, 0);
+  // Tái dùng computeParetoAnalysis cho phần "breadth" thay vì lặp lại vòng lặp tích luỹ - cùng
+  // định nghĩa "80% views" với ParetoChart đang hiển thị trên trang, không lệch số giữa 2 nơi.
+  const pareto = computeParetoAnalysis(creators);
+
+  return {
+    topCreatorPct: CONCENTRATION_TOP_PCT,
+    topCreatorCount: topCount,
+    topViewSharePct: (topViews / totalViews) * 100,
+    creatorsFor80Pct: pareto.creatorsFor80PctViews,
+    creatorsFor80PctPct: pareto.creatorsFor80PctViewsPct,
+    totalCreators,
+  };
+}
+
+export type ConcentrationTrend = {
+  current: ConcentrationRisk;
+  previous: ConcentrationRisk;
+  // Cả 2 đều tính bằng điểm % (không phải % thay đổi tương đối), current − previous:
+  //   shareDeltaPct   dương = phụ thuộc TĂNG (magnitude xấu đi)
+  //   breadthDeltaPct dương = phụ thuộc GIẢM (breadth tốt lên) - NGƯỢC chiều "tốt" với shareDeltaPct
+  shareDeltaPct: number;
+  breadthDeltaPct: number;
+  // Đủ dữ liệu kỳ trước để so sánh (kỳ trước phải có ít nhất 1 creator có views).
+  hasPreviousData: boolean;
+};
+
+export function computeConcentrationTrend(
+  currentCreators: CreatorStat[],
+  previousCreators: CreatorStat[]
+): ConcentrationTrend {
+  const current = computeConcentrationRisk(currentCreators);
+  const previous = computeConcentrationRisk(previousCreators);
+
+  return {
+    current,
+    previous,
+    shareDeltaPct: current.topViewSharePct - previous.topViewSharePct,
+    breadthDeltaPct: current.creatorsFor80PctPct - previous.creatorsFor80PctPct,
+    hasPreviousData: previous.totalCreators > 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Momentum leaderboard: creator tăng/giảm views mạnh nhất so với kỳ trước. Tái dùng
+// current/previous CreatorStat đã tải sẵn ở /creators (giống computeConcentrationTrend),
+// không cần thêm request. Duyệt theo UNION id của cả 2 kỳ (không chỉ current) để bắt được
+// creator "biến mất" hẳn kỳ này (đang hoạt động kỳ trước, kỳ này 0 video) - đây là tín hiệu
+// giảm quan trọng nhất, sẽ bị bỏ sót nếu chỉ lặp qua currentCreators.
+// ---------------------------------------------------------------------------
+
+const MOMENTUM_MIN_VIEWS = 1000; // sàn views ở kỳ dùng để xếp hạng - tránh nhiễu kiểu 10 -> 200 views = "+1900%"
+const MOMENTUM_LIST_SIZE = 8;
+
+export type MomentumEntry = {
+  creatorId: string;
+  name: string;
+  workplaceUnitName?: string;
+  tier: CreatorTier;
+  currentViews: number;
+  previousViews: number;
+  viewsDeltaPct: number; // (current-previous)/previous*100; Infinity nếu kỳ trước = 0 (creator mới nổi)
+};
+
+export type MomentumLeaderboard = {
+  risers: MomentumEntry[]; // tăng mạnh nhất, sắp theo % giảm dần
+  decliners: MomentumEntry[]; // giảm mạnh nhất (kể cả về 0 - "mất tích"), sắp theo % tăng dần
+};
+
+export function computeMomentumLeaderboard(
+  currentCreators: CreatorWithTier[],
+  previousCreators: CreatorStat[],
+  limit: number = MOMENTUM_LIST_SIZE
+): MomentumLeaderboard {
+  const currentMap = new Map(currentCreators.map((c) => [c.creatorId, c]));
+  const previousMap = new Map(previousCreators.map((c) => [c.creatorId, c]));
+  const allIds = new Set([...Array.from(currentMap.keys()), ...Array.from(previousMap.keys())]);
+
+  const entries: MomentumEntry[] = Array.from(allIds).map((creatorId) => {
+    const cur = currentMap.get(creatorId);
+    const prev = previousMap.get(creatorId);
+    const currentViews = cur?.totalViews ?? 0;
+    const previousViews = prev?.totalViews ?? 0;
+
+    return {
+      creatorId,
+      name: cur?.name ?? prev?.name ?? "-",
+      workplaceUnitName: cur?.workplaceUnitName ?? prev?.workplaceUnitName,
+      tier: cur?.tier ?? "unclassified",
+      currentViews,
+      previousViews,
+      viewsDeltaPct: previousViews > 0 ? ((currentViews - previousViews) / previousViews) * 100 : Infinity,
+    };
+  });
+
+  const risers = entries
+    .filter((e) => e.currentViews >= MOMENTUM_MIN_VIEWS)
+    .sort((a, b) => b.viewsDeltaPct - a.viewsDeltaPct)
+    .slice(0, limit);
+
+  const decliners = entries
+    .filter((e) => e.previousViews >= MOMENTUM_MIN_VIEWS)
+    .sort((a, b) => a.viewsDeltaPct - b.viewsDeltaPct)
+    .slice(0, limit);
+
+  return { risers, decliners };
+}
+
+// ---------------------------------------------------------------------------
 // Creator mới vs quay lại theo tuần. "Mới" = lần đầu xuất hiện trong kỳ đang
 // xem VÀ không xuất hiện trong previousWindowItems (thường là 30 ngày trước
 // range.from) - xem thêm fetchContentsRange cho khoảng trước đó.
@@ -1442,20 +1584,28 @@ export function generateCreatorInsights(
   creators: CreatorWithTier[],
   pareto: ParetoResult,
   weeklyTrend: WeeklyCreatorTrend[],
-  rangeTo: string
+  rangeTo: string,
+  concentrationTrend: ConcentrationTrend
 ): string[] {
   const insights: string[] = [];
-  const totalViews = creators.reduce((sum, c) => sum + c.totalViews, 0);
 
-  // 1. Rủi ro phụ thuộc: top 10% creator (theo views) chiếm > 70% views.
-  if (creators.length > 0 && totalViews > 0) {
-    const sortedByViews = [...creators].sort((a, b) => b.totalViews - a.totalViews);
-    const top10Count = Math.max(1, Math.round(creators.length * 0.1));
-    const top10Views = sortedByViews.slice(0, top10Count).reduce((sum, c) => sum + c.totalViews, 0);
-    const top10Pct = (top10Views / totalViews) * 100;
-    if (top10Pct > 70) {
+  // 1. Rủi ro phụ thuộc: top 10% creator (theo views) chiếm bao nhiêu % views, kèm so sánh với kỳ
+  // trước (xem computeConcentrationRisk/computeConcentrationTrend) - báo cả khi đã vượt ngưỡng 70%
+  // lẫn khi đang tăng nhanh (>=10 điểm %/kỳ) dù chưa vượt ngưỡng, để bắt xu hướng xấu đi sớm.
+  const concentration = concentrationTrend.current;
+  if (concentration.totalCreators > 0) {
+    const worseningFast = concentrationTrend.hasPreviousData && concentrationTrend.shareDeltaPct >= 10;
+    if (concentration.topViewSharePct > 70 || worseningFast) {
+      const trendNote =
+        concentrationTrend.hasPreviousData && Math.abs(concentrationTrend.shareDeltaPct) >= 1
+          ? ` (${concentrationTrend.shareDeltaPct >= 0 ? "tăng" : "giảm"} ${Math.abs(concentrationTrend.shareDeltaPct).toFixed(
+              1
+            )} điểm % so với kỳ trước)`
+          : "";
       insights.push(
-        `${formatPercent(top10Pct)} views đến từ ${formatNumber(top10Count)} creator (top 10%) - rủi ro phụ thuộc.`
+        `${formatPercent(concentration.topViewSharePct)} views đến từ ${formatNumber(
+          concentration.topCreatorCount
+        )} creator (top 10%) - rủi ro phụ thuộc${trendNote}.`
       );
     }
   }
@@ -1515,6 +1665,84 @@ export function generateCreatorInsights(
   }
 
   return insights.slice(0, 5);
+}
+
+// ---------------------------------------------------------------------------
+// Creator cần chú ý: đang giữ tiền chưa rút nhưng thiếu thông tin để chi trả, hoặc tier Ngôi sao
+// đột nhiên ngừng hoạt động - dùng cho trang tổng hợp việc cần làm (/actions).
+// ---------------------------------------------------------------------------
+
+export type CreatorAttentionReason =
+  | "no_phone_with_balance"
+  | "no_contract_with_balance"
+  | "banned_with_balance"
+  | "inactive_star";
+
+export const CREATOR_ATTENTION_REASON_LABEL: Record<CreatorAttentionReason, string> = {
+  no_phone_with_balance: "Còn tiền chưa rút nhưng thiếu SĐT",
+  no_contract_with_balance: "Còn tiền chưa rút nhưng chưa có hợp đồng",
+  banned_with_balance: "Đã bị khoá nhưng còn tiền chưa rút",
+  inactive_star: "Tier Ngôi sao nhưng không đăng >7 ngày",
+};
+
+export type CreatorAttentionItem = {
+  creatorId: string;
+  name: string;
+  workplaceUnitName?: string;
+  tier: CreatorTier;
+  cashRemaining: number | null;
+  lastPublishedAt: string;
+  reasons: CreatorAttentionReason[];
+};
+
+// cash_remaining > 0 gần như luôn đúng (đo thực tế: median chỉ ~870đ, p90 ~65k) - phần lớn là số dư
+// lặt vặt chưa tới ngưỡng creator buồn rút, không phải tiền "đang bị kẹt" đáng để BTC chủ động
+// liên hệ. Chỉ flag khi số dư đủ lớn để đáng công chạy theo (ngưỡng tham khảo: xấp xỉ 1 bài Threads
+// theo lib/campaignRules.ts, 150.000đ) - ngưỡng này nên điều chỉnh lại theo thực tế vận hành.
+const CREATOR_ATTENTION_MIN_BALANCE = 200_000;
+
+// Chỉ flag "thiếu SĐT/hợp đồng" khi creator ĐANG giữ số dư đáng kể chưa rút - tránh nhiễu vì phần
+// lớn creator chỉ có vài trăm đồng lặt vặt, chưa kể creator mới vốn dĩ chưa cần các thông tin này
+// (cùng tinh thần lọc "chỉ xét creator có cash & đủ views" ở computeCpvRanking).
+export function computeCreatorAttentionList(
+  creators: CreatorWithTier[],
+  profiles: Map<string, UserDetail>,
+  referenceDate: string
+): CreatorAttentionItem[] {
+  const cutoff = addDaysToVnDate(referenceDate, -7);
+  const result: CreatorAttentionItem[] = [];
+
+  creators.forEach((c) => {
+    const profile = profiles.get(c.creatorId);
+    const cashRemaining = profile?.statistic?.cashRemaining ?? null;
+    const hasBalance = (cashRemaining ?? 0) > CREATOR_ATTENTION_MIN_BALANCE;
+    const reasons: CreatorAttentionReason[] = [];
+
+    if (hasBalance && !profile?.phone?.full) reasons.push("no_phone_with_balance");
+    if (hasBalance && !profile?.contract?.status) reasons.push("no_contract_with_balance");
+    if (hasBalance && profile?.banned) reasons.push("banned_with_balance");
+
+    if (c.tier === "star") {
+      const lastDay = toVnDateKey(c.lastPublishedAt);
+      if (lastDay !== null && lastDay < cutoff) reasons.push("inactive_star");
+    }
+
+    if (reasons.length === 0) return;
+
+    result.push({
+      creatorId: c.creatorId,
+      name: c.name,
+      workplaceUnitName: c.workplaceUnitName,
+      tier: c.tier,
+      cashRemaining,
+      lastPublishedAt: c.lastPublishedAt,
+      reasons,
+    });
+  });
+
+  return result.sort(
+    (a, b) => b.reasons.length - a.reasons.length || (b.cashRemaining ?? 0) - (a.cashRemaining ?? 0)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1985,11 +2213,23 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
 // thiểu, cap views/video theo từng campaign, và countdown thời gian chương trình.
 // ---------------------------------------------------------------------------
 
+export type EngagementRiskItem = {
+  contentId: string;
+  title: string;
+  link: string;
+  creatorId: string;
+  creatorName: string;
+  source: ContentSource;
+  views: number;
+  engagementRate: number; // (likes + comments) / views
+  reason: "engagement_rate" | "comment_ratio";
+};
+
 export type EngagementCompliance = {
   checkedCount: number;
   atRiskCount: number;
   atRiskPct: number;
-  sampleTitles: string[];
+  atRiskItems: EngagementRiskItem[]; // sắp theo views giảm dần, đủ để hiển thị bảng chi tiết
 };
 
 // Video nguồn Threads có luật riêng (xem lib/campaignRules.ts) và không đủ dữ liệu để phân biệt
@@ -2000,27 +2240,42 @@ export function computeEngagementCompliance(items: ContentItem[]): EngagementCom
     (it) => it.source !== "threads" && (it.statistic?.view?.total ?? 0) >= ENGAGEMENT_CHECK_MIN_VIEWS
   );
 
-  const atRisk = candidates.filter((it) => {
+  const atRiskItems: EngagementRiskItem[] = [];
+  candidates.forEach((it) => {
     const views = it.statistic?.view?.total ?? 0;
     const likes = it.statistic?.like?.total ?? 0;
     const comments = it.statistic?.comment?.total ?? 0;
     const engagementRate = (likes + comments) / views;
-    if (engagementRate < VIDEO_ENGAGEMENT_MIN_RATE) return true;
 
-    const tier = VIDEO_COMMENT_RATIO_TIERS.find((t) => views >= t.minViews && views < t.maxViews);
-    if (tier && comments / views < tier.minRatio) return true;
+    let reason: EngagementRiskItem["reason"] | null = null;
+    if (engagementRate < VIDEO_ENGAGEMENT_MIN_RATE) {
+      reason = "engagement_rate";
+    } else {
+      const tier = VIDEO_COMMENT_RATIO_TIERS.find((t) => views >= t.minViews && views < t.maxViews);
+      if (tier && comments / views < tier.minRatio) reason = "comment_ratio";
+    }
+    if (!reason) return;
 
-    return false;
+    atRiskItems.push({
+      contentId: it._id,
+      title: it.title || it.link,
+      link: it.link,
+      creatorId: it.createdBy?._id ?? "",
+      creatorName: it.createdBy?.name ?? "-",
+      source: it.source,
+      views,
+      engagementRate,
+      reason,
+    });
   });
+
+  atRiskItems.sort((a, b) => b.views - a.views);
 
   return {
     checkedCount: candidates.length,
-    atRiskCount: atRisk.length,
-    atRiskPct: candidates.length > 0 ? (atRisk.length / candidates.length) * 100 : 0,
-    sampleTitles: [...atRisk]
-      .sort((a, b) => (b.statistic?.view?.total ?? 0) - (a.statistic?.view?.total ?? 0))
-      .slice(0, 3)
-      .map((it) => it.title || it.link),
+    atRiskCount: atRiskItems.length,
+    atRiskPct: candidates.length > 0 ? (atRiskItems.length / candidates.length) * 100 : 0,
+    atRiskItems,
   };
 }
 
@@ -2138,6 +2393,46 @@ export function computeCampaignTimelines(items: ContentItem[], referenceDate: st
   });
 
   return results.sort((a, b) => a.daysRemaining - b.daysRemaining);
+}
+
+// ---------------------------------------------------------------------------
+// Gộp cap risk + timeline theo từng campaign thành 1 danh sách theo dõi duy nhất - dùng cho trang
+// tổng hợp việc cần làm (/actions) thay vì phải đọc 2 bảng/insight riêng ở /campaigns.
+// ---------------------------------------------------------------------------
+
+export type CampaignWatchlistRow = {
+  eventName: string;
+  label: string;
+  endDate: string;
+  daysRemaining: number;
+  isEnded: boolean;
+  possiblyExtended: boolean;
+  viewCapPerVideo: number | null;
+  videosOverCap: number;
+  totalVideos: number;
+  viewsBeyondCap: number;
+};
+
+export function computeCampaignWatchlist(items: ContentItem[], referenceDate: string): CampaignWatchlistRow[] {
+  const capByEvent = new Map(computeCampaignCapRisks(items).map((c) => [c.eventName, c]));
+
+  return computeCampaignTimelines(items, referenceDate)
+    .map((t) => {
+      const cap = capByEvent.get(t.eventName);
+      return {
+        eventName: t.eventName,
+        label: t.label,
+        endDate: t.endDate,
+        daysRemaining: t.daysRemaining,
+        isEnded: t.isEnded,
+        possiblyExtended: t.possiblyExtended,
+        viewCapPerVideo: cap?.viewCapPerVideo ?? null,
+        videosOverCap: cap?.videosOverCap ?? 0,
+        totalVideos: cap?.totalVideos ?? 0,
+        viewsBeyondCap: cap?.viewsBeyondCap ?? 0,
+      };
+    })
+    .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
 function formatDateVi(dateStr: string): string {
