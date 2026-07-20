@@ -10,9 +10,11 @@ import CreatorDrawer from "@/components/CreatorDrawer";
 import DataErrorBanner from "@/components/DataErrorBanner";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
+import DuplicateContentTable from "@/components/DuplicateContentTable";
 import EngagementRiskTable from "@/components/EngagementRiskTable";
 import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
 import Nav from "@/components/Nav";
+import OffChannelViolationsTable from "@/components/OffChannelViolationsTable";
 import RefreshIndicator from "@/components/RefreshIndicator";
 import {
   classifyCreatorTiers,
@@ -20,7 +22,9 @@ import {
   computeCreatorAttentionList,
   computeCreatorChannelsSummary,
   computeCreatorStats,
+  computeDuplicateContent,
   computeEngagementCompliance,
+  computeOffChannelViolations,
   countVnWeeksInRange,
   fetchContentsSmart,
   fetchCreatorProfilesFromSupabase,
@@ -81,6 +85,7 @@ export default function ActionsPage() {
     () => computeCreatorAttentionList(creatorsWithTier, userProfiles, referenceDate),
     [creatorsWithTier, userProfiles, referenceDate]
   );
+  const duplicateContent = useMemo(() => computeDuplicateContent(items), [items]);
 
   const campaignsOverCapCount = watchlist.filter((w) => w.videosOverCap > 0).length;
   const campaignsEndingSoonCount = watchlist.filter(
@@ -107,6 +112,11 @@ export default function ActionsPage() {
     });
     return map;
   }, [itemsByCreator, userProfiles]);
+
+  const offChannelViolations = useMemo(
+    () => computeOffChannelViolations(itemsByCreator, userProfiles),
+    [itemsByCreator, userProfiles]
+  );
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
 
@@ -163,6 +173,8 @@ export default function ActionsPage() {
             campaignsOverCapCount={campaignsOverCapCount}
             campaignsEndingSoonCount={campaignsEndingSoonCount}
             creatorAttentionCount={creatorAttention.length}
+            duplicateContentCount={duplicateContent.length}
+            offChannelViolationCount={offChannelViolations.length}
           />
 
           <EngagementRiskTable isLoading={isLoading} data={compliance.atRiskItems} />
@@ -172,6 +184,14 @@ export default function ActionsPage() {
           <CreatorAttentionTable
             isLoading={isLoading}
             data={creatorAttention}
+            onSelectCreator={setSelectedCreatorId}
+          />
+
+          <DuplicateContentTable isLoading={isLoading} data={duplicateContent} />
+
+          <OffChannelViolationsTable
+            isLoading={isLoading}
+            data={offChannelViolations}
             onSelectCreator={setSelectedCreatorId}
           />
         </div>

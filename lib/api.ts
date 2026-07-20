@@ -939,6 +939,62 @@ export function computeCreatorChannelsSummary(
   return { linkedChannel, postedChannels, offChannelWarning };
 }
 
+// ---------------------------------------------------------------------------
+// Báo cáo vi phạm đăng ngoài kênh liên kết - tổng hợp CROSS-CREATOR từ offChannelWarning (hiện
+// chỉ hiện dạng chip nhỏ trên từng dòng CreatorTable, chưa có báo cáo tổng hợp/xếp hạng nào).
+// Quy đổi ra video/views/cash cụ thể bị ảnh hưởng để BTC biết mức độ nghiêm trọng, không chỉ
+// 1 cờ true/false. Dùng cho /actions.
+// ---------------------------------------------------------------------------
+
+export type OffChannelViolation = {
+  creatorId: string;
+  creatorName: string;
+  workplaceUnitName?: string;
+  linkedUsername: string;
+  unauthorizedChannels: { username: string; videos: number }[];
+  videosAffected: number;
+  viewsAffected: number;
+  cashAffected: number;
+};
+
+export function computeOffChannelViolations(
+  itemsByCreator: Map<string, ContentItem[]>,
+  profiles: Map<string, UserDetail>
+): OffChannelViolation[] {
+  const violations: OffChannelViolation[] = [];
+
+  itemsByCreator.forEach((creatorItems, creatorId) => {
+    const profile = profiles.get(creatorId);
+    const summary = computeCreatorChannelsSummary(creatorItems, profile);
+    if (!summary.offChannelWarning || !summary.linkedChannel) return;
+
+    const linkedUsername = summary.linkedChannel.username!.toLowerCase();
+    const unauthorized = summary.postedChannels.filter(
+      (c) => c.platform === "tiktok" && !!c.username && c.username.toLowerCase() !== linkedUsername
+    );
+    if (unauthorized.length === 0) return;
+
+    const unauthorizedUsernames = new Set(unauthorized.map((c) => c.username!.toLowerCase()));
+    const affectedItems = creatorItems.filter((it) => {
+      const ch = getResolvedChannel(it);
+      return ch.platform === "tiktok" && !!ch.username && unauthorizedUsernames.has(ch.username.toLowerCase());
+    });
+
+    violations.push({
+      creatorId,
+      creatorName: creatorItems[0]?.createdBy?.name ?? "-",
+      workplaceUnitName: creatorItems[0]?.createdBy?.workplaceUnitName,
+      linkedUsername: summary.linkedChannel.username!,
+      unauthorizedChannels: unauthorized.map((c) => ({ username: c.username!, videos: c.videos })),
+      videosAffected: affectedItems.length,
+      viewsAffected: affectedItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0),
+      cashAffected: affectedItems.reduce((sum, it) => sum + (it.statistic?.cash?.total ?? 0), 0),
+    });
+  });
+
+  return violations.sort((a, b) => b.cashAffected - a.cashAffected || b.viewsAffected - a.viewsAffected);
+}
+
 // Số ngày kể từ 1 mốc ISO tới hiện tại (dùng cho cờ lọc "không hoạt động >30 ngày").
 export function daysSince(isoString?: string): number | null {
   if (!isoString) return null;
@@ -2519,6 +2575,82 @@ export function computeEngagementCompliance(items: ContentItem[]): EngagementCom
     atRiskPct: candidates.length > 0 ? (atRiskItems.length / candidates.length) * 100 : 0,
     atRiskItems,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phát hiện link trùng lặp: cùng 1 link video (chuẩn hoá bỏ query/protocol/www) xuất hiện ở
+// >=2 content_id - có thể là 1 creator nộp lại nhiều lần (double-dip nhiều campaign) hoặc nhiều
+// creator cùng nộp 1 link (đăng lại/nhận vơ nội dung người khác). Năng lực hoàn toàn mới, chưa có
+// module nào kiểm tra tính toàn vẹn của link nộp.
+// ---------------------------------------------------------------------------
+
+export type DuplicateContentItem = {
+  contentId: string;
+  creatorId: string;
+  creatorName: string;
+  eventName: string;
+  publishedAt: string;
+  views: number;
+  cash: number;
+};
+
+export type DuplicateContentGroup = {
+  normalizedLink: string;
+  sampleLink: string;
+  submissions: number;
+  creators: number;
+  totalViews: number;
+  totalCash: number;
+  items: DuplicateContentItem[];
+};
+
+function normalizeLink(link: string): string {
+  try {
+    const url = new URL(link);
+    const path = url.pathname.replace(/\/+$/, "");
+    return `${url.hostname.replace(/^www\./, "")}${path}`.toLowerCase();
+  } catch {
+    return link.trim().toLowerCase();
+  }
+}
+
+export function computeDuplicateContent(items: ContentItem[]): DuplicateContentGroup[] {
+  const map = new Map<string, ContentItem[]>();
+  items.forEach((item) => {
+    if (!item.link) return;
+    const key = normalizeLink(item.link);
+    const arr = map.get(key) ?? [];
+    arr.push(item);
+    map.set(key, arr);
+  });
+
+  const groups: DuplicateContentGroup[] = [];
+  map.forEach((groupItems, normalizedLink) => {
+    if (groupItems.length < 2) return; // chỉ giữ nhóm thực sự trùng lặp
+
+    const creators = new Set(groupItems.map((it) => it.createdBy?._id).filter(Boolean));
+    groups.push({
+      normalizedLink,
+      sampleLink: groupItems[0].link,
+      submissions: groupItems.length,
+      creators: creators.size,
+      totalViews: groupItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0),
+      totalCash: groupItems.reduce((sum, it) => sum + (it.statistic?.cash?.total ?? 0), 0),
+      items: groupItems
+        .map((it) => ({
+          contentId: it._id,
+          creatorId: it.createdBy?._id ?? "",
+          creatorName: it.createdBy?.name ?? "-",
+          eventName: it.event?.name ?? "-",
+          publishedAt: it.publishedAt || it.createdAt,
+          views: it.statistic?.view?.total ?? 0,
+          cash: it.statistic?.cash?.total ?? 0,
+        }))
+        .sort((a, b) => (a.publishedAt < b.publishedAt ? -1 : 1)),
+    });
+  });
+
+  return groups.sort((a, b) => b.totalCash - a.totalCash || b.submissions - a.submissions);
 }
 
 export type CampaignCapRisk = {
