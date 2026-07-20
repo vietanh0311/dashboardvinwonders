@@ -38,6 +38,7 @@ import {
   computeTierBreakdown,
   countVnWeeksInRange,
   daysSince,
+  diffDaysUtc,
   fetchContentsSmart,
   fetchCreatorIdsInRangeFromSupabase,
   fetchCreatorLifecycle,
@@ -176,9 +177,11 @@ export default function CreatorsPage() {
     [creatorsWithTier, previousCreatorIds]
   );
 
+  const currentRangeDays = diffDaysUtc(range.from, range.to) + 1;
+  const previousRangeDays = diffDaysUtc(previousFrom, previousTo) + 1;
   const facilityScorecard = useMemo(
-    () => computeFacilityScorecard(creatorsWithTier, previousCreatorStats),
-    [creatorsWithTier, previousCreatorStats]
+    () => computeFacilityScorecard(creatorsWithTier, previousCreatorStats, currentRangeDays, previousRangeDays),
+    [creatorsWithTier, previousCreatorStats, currentRangeDays, previousRangeDays]
   );
 
   const creatorTierMap = useMemo(

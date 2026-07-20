@@ -1668,9 +1668,16 @@ function aggregateCreatorStatsByUnit(creators: CreatorStat[]): Map<string, Facil
 
 const FACILITY_TREND_THRESHOLD_PCT = 15;
 
+// currentDays/previousDays: độ dài (số ngày) của kỳ đang xem và kỳ so sánh - 2 kỳ này thường
+// KHÁC độ dài nhau (kỳ so sánh ở /creators luôn cố định 30 ngày, kỳ đang xem do người dùng chọn,
+// mặc định 7 ngày). So trực tiếp tổng views 2 kỳ sẽ luôn thiên về "giảm" chỉ vì kỳ ngắn hơn cộng
+// dồn ít views hơn kỳ dài hơn - phải quy về views/ngày trước khi so thì xu hướng mới phản ánh
+// đúng thực tế thay vì lệch có hệ thống theo độ dài kỳ.
 export function computeFacilityScorecard(
   currentCreators: CreatorStat[],
-  previousCreators: CreatorStat[]
+  previousCreators: CreatorStat[],
+  currentDays: number,
+  previousDays: number
 ): FacilityScorecardRow[] {
   const current = aggregateCreatorStatsByUnit(currentCreators);
   if (current.size === 0) return [];
@@ -1706,7 +1713,11 @@ export function computeFacilityScorecard(
 
     const prev = previous.get(r.unitName);
     const prevViews = prev?.totalViews ?? 0;
-    const viewsDeltaPct = prevViews > 0 ? ((r.totalViews - prevViews) / prevViews) * 100 : r.totalViews > 0 ? Infinity : 0;
+    // Quy về views/ngày để so công bằng giữa 2 kỳ khác độ dài (xem giải thích ở khai báo hàm).
+    const currentDailyViews = currentDays > 0 ? r.totalViews / currentDays : r.totalViews;
+    const prevDailyViews = previousDays > 0 ? prevViews / previousDays : prevViews;
+    const viewsDeltaPct =
+      prevDailyViews > 0 ? ((currentDailyViews - prevDailyViews) / prevDailyViews) * 100 : currentDailyViews > 0 ? Infinity : 0;
     const trend: FacilityTrend =
       prevViews === 0 && r.totalViews > 0
         ? "new"
@@ -2726,7 +2737,7 @@ function dateKeyToUtcMs(dateStr: string): number {
   return Date.UTC(year, month - 1, day); // Date.UTC dùng month 0-based, chuỗi ngày là 1-based
 }
 
-function diffDaysUtc(fromDateStr: string, toDateStr: string): number {
+export function diffDaysUtc(fromDateStr: string, toDateStr: string): number {
   return Math.round((dateKeyToUtcMs(toDateStr) - dateKeyToUtcMs(fromDateStr)) / (24 * 60 * 60 * 1000));
 }
 
