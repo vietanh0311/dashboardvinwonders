@@ -10,27 +10,30 @@ import CreatorSearch from "@/components/CreatorSearch";
 import CreatorTable from "@/components/CreatorTable";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
+import FacilityScorecard from "@/components/FacilityScorecard";
 import InsightsPanel from "@/components/InsightsPanel";
 import DataErrorBanner from "@/components/DataErrorBanner";
 import MomentumLeaderboardCard from "@/components/MomentumLeaderboardCard";
 import Nav from "@/components/Nav";
+import PostingTimeByGroupTable from "@/components/PostingTimeByGroupTable";
 import RefreshIndicator from "@/components/RefreshIndicator";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
 import TierBreakdownTable from "@/components/TierBreakdownTable";
-import UnitComparisonTable from "@/components/UnitComparisonTable";
 import {
   addDaysToVnDate,
   classifyCreatorTiers,
+  computeBestPostingTimeByFacility,
+  computeBestPostingTimeByTier,
   computeConcentrationTrend,
   computeCpvRanking,
   computeCreatorChannelsSummary,
   computeCreatorStats,
+  computeFacilityScorecard,
   computeMomentumLeaderboard,
   computeNewVsReturning,
   computeParetoAnalysis,
   computeTierBreakdown,
-  computeUnitComparison,
   countVnWeeksInRange,
   daysSince,
   fetchContentsSmart,
@@ -43,6 +46,7 @@ import {
   type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
+  type CreatorTier,
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
@@ -165,7 +169,20 @@ export default function CreatorsPage() {
     [creatorsWithTier, previousCreatorIds]
   );
 
-  const unitComparison = useMemo(() => computeUnitComparison(creatorsWithTier), [creatorsWithTier]);
+  const facilityScorecard = useMemo(
+    () => computeFacilityScorecard(creatorsWithTier, previousCreatorStats),
+    [creatorsWithTier, previousCreatorStats]
+  );
+
+  const creatorTierMap = useMemo(
+    () => new Map<string, CreatorTier>(creatorsWithTier.map((c) => [c.creatorId, c.tier])),
+    [creatorsWithTier]
+  );
+  const postingTimeByFacility = useMemo(() => computeBestPostingTimeByFacility(currentItems), [currentItems]);
+  const postingTimeByTier = useMemo(
+    () => computeBestPostingTimeByTier(currentItems, creatorTierMap),
+    [currentItems, creatorTierMap]
+  );
 
   const cpvRanking = useMemo(() => computeCpvRanking(creatorsWithTier), [creatorsWithTier]);
 
@@ -326,8 +343,10 @@ export default function CreatorsPage() {
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <TierBreakdownTable isLoading={isLoadingCompare} data={tierBreakdown} />
-          <UnitComparisonTable isLoading={isLoading} data={unitComparison} />
+          <FacilityScorecard isLoading={isLoading} data={facilityScorecard} />
         </div>
+
+        <PostingTimeByGroupTable isLoading={isLoading} byFacility={postingTimeByFacility} byTier={postingTimeByTier} />
 
         <CpvRankingPanel isLoading={isLoading} data={cpvRanking} onSelectCreator={setSelectedCreatorId} />
         </div>

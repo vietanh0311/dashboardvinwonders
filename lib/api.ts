@@ -1555,6 +1555,132 @@ export function computeUnitComparison(creators: CreatorStat[]): UnitComparisonRo
 }
 
 // ---------------------------------------------------------------------------
+// Facility scorecard: xếp hạng cơ sở bằng điểm tổng hợp (views TB/video, engagement, hiệu quả
+// CPV) + xu hướng so kỳ trước - khác UnitComparisonTable (chỉ liệt kê số liệu thô, không xếp
+// hạng/không xu hướng). Tái dùng previousCreatorStats đã tải sẵn ở /creators cho concentration
+// trend/momentum - không cần thêm request nào.
+// ---------------------------------------------------------------------------
+
+export type FacilityTrend = "new" | "improving" | "declining" | "steady";
+
+export type FacilityScorecardRow = {
+  unitName: string;
+  creators: number;
+  videos: number;
+  totalViews: number;
+  avgViewsPerVideo: number;
+  engagementRate: number;
+  cpv: number;
+  hasCashData: boolean;
+  score: number; // 0-100, càng cao càng tốt
+  rank: number;
+  viewsDeltaPct: number; // so kỳ trước; Infinity nếu kỳ trước = 0 và kỳ này > 0
+  trend: FacilityTrend;
+};
+
+type FacilityAgg = {
+  creators: Set<string>;
+  videos: number;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalCash: number;
+};
+
+function aggregateCreatorStatsByUnit(creators: CreatorStat[]): Map<string, FacilityAgg> {
+  const map = new Map<string, FacilityAgg>();
+  creators.forEach((c) => {
+    const key = c.workplaceUnitName || "Không rõ";
+    const entry = map.get(key) ?? {
+      creators: new Set<string>(),
+      videos: 0,
+      totalViews: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalCash: 0,
+    };
+    entry.creators.add(c.creatorId);
+    entry.videos += c.videos;
+    entry.totalViews += c.totalViews;
+    entry.totalLikes += c.totalLikes;
+    entry.totalComments += c.totalComments;
+    entry.totalCash += c.totalCash;
+    map.set(key, entry);
+  });
+  return map;
+}
+
+const FACILITY_TREND_THRESHOLD_PCT = 15;
+
+export function computeFacilityScorecard(
+  currentCreators: CreatorStat[],
+  previousCreators: CreatorStat[]
+): FacilityScorecardRow[] {
+  const current = aggregateCreatorStatsByUnit(currentCreators);
+  if (current.size === 0) return [];
+  const previous = aggregateCreatorStatsByUnit(previousCreators);
+
+  const base = Array.from(current.entries()).map(([unitName, v]) => ({
+    unitName,
+    creators: v.creators.size,
+    videos: v.videos,
+    totalViews: v.totalViews,
+    avgViewsPerVideo: v.videos > 0 ? v.totalViews / v.videos : 0,
+    engagementRate: v.totalViews > 0 ? (v.totalLikes + v.totalComments) / v.totalViews : 0,
+    cpv: v.totalViews > 0 ? v.totalCash / v.totalViews : 0,
+    totalCash: v.totalCash,
+  }));
+
+  // Chuẩn hoá min-max giữa các cơ sở trong kỳ đang xem - điểm chỉ có ý nghĩa SO SÁNH tương đối
+  // giữa các cơ sở cùng kỳ, không phải điểm tuyệt đối theo thời gian.
+  const avgViewsMax = Math.max(...base.map((r) => r.avgViewsPerVideo), 0) || 1;
+  const engagementMax = Math.max(...base.map((r) => r.engagementRate), 0) || 1;
+  const cpvCandidates = base.filter((r) => r.totalCash > 0).map((r) => r.cpv);
+  const cpvMax = cpvCandidates.length > 0 ? Math.max(...cpvCandidates) : 0;
+  const hasCashData = cpvMax > 0;
+
+  const scored = base.map((r) => {
+    const viewsScore = (r.avgViewsPerVideo / avgViewsMax) * 100;
+    const engagementScore = (r.engagementRate / engagementMax) * 100;
+    // CPV thấp = hiệu quả cao hơn; cơ sở chưa có cash coi như trung tính (không thưởng/không phạt).
+    const efficiencyScore = r.totalCash > 0 ? (1 - r.cpv / cpvMax) * 100 : 100;
+    const score = hasCashData
+      ? viewsScore * 0.5 + engagementScore * 0.3 + efficiencyScore * 0.2
+      : viewsScore * 0.65 + engagementScore * 0.35;
+
+    const prev = previous.get(r.unitName);
+    const prevViews = prev?.totalViews ?? 0;
+    const viewsDeltaPct = prevViews > 0 ? ((r.totalViews - prevViews) / prevViews) * 100 : r.totalViews > 0 ? Infinity : 0;
+    const trend: FacilityTrend =
+      prevViews === 0 && r.totalViews > 0
+        ? "new"
+        : viewsDeltaPct >= FACILITY_TREND_THRESHOLD_PCT
+          ? "improving"
+          : viewsDeltaPct <= -FACILITY_TREND_THRESHOLD_PCT
+            ? "declining"
+            : "steady";
+
+    return {
+      unitName: r.unitName,
+      creators: r.creators,
+      videos: r.videos,
+      totalViews: r.totalViews,
+      avgViewsPerVideo: r.avgViewsPerVideo,
+      engagementRate: r.engagementRate,
+      cpv: r.cpv,
+      hasCashData,
+      score: Math.round(score * 10) / 10,
+      viewsDeltaPct,
+      trend,
+    };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+// ---------------------------------------------------------------------------
 // Xếp hạng creator theo CPV (chi phí/view) - ai đang chi hiệu quả nhất/kém
 // nhất. Chỉ xét creator có cash & đủ views để tránh nhiễu do mẫu quá nhỏ.
 // ---------------------------------------------------------------------------
@@ -1927,6 +2053,68 @@ export function computePublishHeatmapBySource(items: ContentItem[]): SourceHeatm
       return { source, totalVideos: list.length, cells, best: pickBestHeatmapCell(cells) };
     })
     .sort((a, b) => b.totalVideos - a.totalVideos);
+}
+
+// ---------------------------------------------------------------------------
+// Khung giờ vàng theo cơ sở/tier: khác PublishHeatmap (cắt theo nền tảng, hiển thị lưới đầy đủ)
+// - cắt theo trục tổ chức (cơ sở/tier creator) và chỉ trả về 1 khuyến nghị gọn/nhóm (không render
+// lưới 7x24 cho từng nhóm, tránh phình DOM khi có nhiều cơ sở). Tái dùng computePublishHeatmap +
+// pickBestHeatmapCell đã có sẵn, chỉ đổi cách gom nhóm.
+// ---------------------------------------------------------------------------
+
+export type PostingTimeGroup = {
+  key: string;
+  label: string;
+  totalVideos: number;
+  best: HeatmapCell | null;
+  avgViews: number; // avg views/video của cả nhóm (mẫu số để so "lift" ở khung giờ vàng)
+};
+
+function computeBestPostingTimeByGroup(
+  items: ContentItem[],
+  keyOf: (item: ContentItem) => string | undefined,
+  labelOf: (key: string) => string
+): PostingTimeGroup[] {
+  const byGroup = new Map<string, ContentItem[]>();
+  items.forEach((item) => {
+    const key = keyOf(item);
+    if (!key) return;
+    const arr = byGroup.get(key) ?? [];
+    arr.push(item);
+    byGroup.set(key, arr);
+  });
+
+  return Array.from(byGroup.entries())
+    .map(([key, groupItems]) => {
+      const totalViews = groupItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0);
+      return {
+        key,
+        label: labelOf(key),
+        totalVideos: groupItems.length,
+        best: pickBestHeatmapCell(computePublishHeatmap(groupItems)),
+        avgViews: groupItems.length > 0 ? totalViews / groupItems.length : 0,
+      };
+    })
+    .sort((a, b) => b.totalVideos - a.totalVideos);
+}
+
+export function computeBestPostingTimeByFacility(items: ContentItem[]): PostingTimeGroup[] {
+  return computeBestPostingTimeByGroup(
+    items,
+    (it) => it.createdBy?.workplaceUnitName || undefined,
+    (key) => key
+  );
+}
+
+export function computeBestPostingTimeByTier(
+  items: ContentItem[],
+  creatorTierMap: Map<string, CreatorTier>
+): PostingTimeGroup[] {
+  return computeBestPostingTimeByGroup(
+    items,
+    (it) => (it.createdBy?._id ? creatorTierMap.get(it.createdBy._id) : undefined),
+    (key) => CREATOR_TIER_LABEL[key as CreatorTier] ?? key
+  );
 }
 
 // ---------------------------------------------------------------------------
