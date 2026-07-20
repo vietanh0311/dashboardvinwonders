@@ -2397,6 +2397,60 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
 }
 
 // ---------------------------------------------------------------------------
+// Xếp hạng HIỆU QUẢ theo tag (warningTags) - khác TagAnalysisTable/computeTagAnalysis (xếp theo
+// SỐ LƯỢNG video + cảnh báo tăng đột biến tuần): ở đây xếp theo avg views/engagement, kèm % lift
+// so với trung bình chung và cờ độ tin cậy theo cỡ mẫu - trả lời "nội dung/tag nào nên đẩy mạnh,
+// tag nào nên giảm" thay vì chỉ mô tả khối lượng.
+// ---------------------------------------------------------------------------
+
+const TAG_PERFORMANCE_MIN_SAMPLE = 5; // dưới ngưỡng này vẫn hiển thị nhưng gắn cờ "mẫu nhỏ"
+
+export type TagPerformanceRow = {
+  name: string;
+  videos: number;
+  avgViews: number;
+  engagementRate: number;
+  liftVsOverallPct: number; // dương = tốt hơn trung bình chung, âm = kém hơn
+  confidence: "low" | "high";
+};
+
+export function computeTagPerformanceRanking(items: ContentItem[]): TagPerformanceRow[] {
+  const overallViews = items.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0);
+  const overallAvgViews = items.length > 0 ? overallViews / items.length : 0;
+
+  const map = new Map<string, { videos: number; totalViews: number; totalLikes: number; totalComments: number }>();
+  items.forEach((item) => {
+    const views = item.statistic?.view?.total ?? 0;
+    const likes = item.statistic?.like?.total ?? 0;
+    const comments = item.statistic?.comment?.total ?? 0;
+
+    (item.warningTags ?? []).forEach((tag) => {
+      if (!tag?.name || AI_AUTO_TAGS.has(tag.name)) return;
+      const entry = map.get(tag.name) ?? { videos: 0, totalViews: 0, totalLikes: 0, totalComments: 0 };
+      entry.videos += 1;
+      entry.totalViews += views;
+      entry.totalLikes += likes;
+      entry.totalComments += comments;
+      map.set(tag.name, entry);
+    });
+  });
+
+  return Array.from(map.entries())
+    .map(([name, v]) => {
+      const avgViews = v.videos > 0 ? v.totalViews / v.videos : 0;
+      return {
+        name,
+        videos: v.videos,
+        avgViews,
+        engagementRate: v.totalViews > 0 ? (v.totalLikes + v.totalComments) / v.totalViews : 0,
+        liftVsOverallPct: overallAvgViews > 0 ? ((avgViews - overallAvgViews) / overallAvgViews) * 100 : 0,
+        confidence: (v.videos >= TAG_PERFORMANCE_MIN_SAMPLE ? "high" : "low") as "low" | "high",
+      };
+    })
+    .sort((a, b) => b.avgViews - a.avgViews);
+}
+
+// ---------------------------------------------------------------------------
 // Compliance với thể lệ chương trình thật (xem lib/campaignRules.ts): tương tác/comment tối
 // thiểu, cap views/video theo từng campaign, và countdown thời gian chương trình.
 // ---------------------------------------------------------------------------

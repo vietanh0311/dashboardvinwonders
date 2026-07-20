@@ -16,6 +16,7 @@ import RefreshIndicator from "@/components/RefreshIndicator";
 import PublishHeatmap from "@/components/PublishHeatmap";
 import SourceComparisonTable from "@/components/SourceComparisonTable";
 import TagAnalysisTable from "@/components/TagAnalysisTable";
+import TagPerformanceRankingTable from "@/components/TagPerformanceRankingTable";
 import ViewDistributionPanel from "@/components/ViewDistributionPanel";
 import {
   computeCampaignLifecycle,
@@ -25,6 +26,7 @@ import {
   computePublishHeatmapBySource,
   computeSourceComparison,
   computeTagAnalysis,
+  computeTagPerformanceRanking,
   computeViewDistribution,
   fetchContentsSmart,
   fetchEventsSmart,
@@ -84,6 +86,7 @@ export default function CampaignsPage() {
   const sourceComparison = useMemo(() => computeSourceComparison(items), [items]);
   const campaignStats = useMemo(() => computeCampaignStats(items), [items]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(items), [items]);
+  const tagPerformance = useMemo(() => computeTagPerformanceRanking(items), [items]);
 
   const insights = useMemo(
     () => generateCampaignInsights(campaignStats, heatmap, viewDist, tagAnalysis, items, referenceDate),
@@ -167,6 +170,8 @@ export default function CampaignsPage() {
             momentum={momentum}
             isLoading={lifecycleFetch.isLoading}
           />
+
+          <TagPerformanceRankingTable isLoading={isLoading} data={tagPerformance} />
 
           <TagAnalysisTable isLoading={isLoading} data={tagAnalysis} />
         </div>
