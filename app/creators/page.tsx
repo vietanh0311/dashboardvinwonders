@@ -80,6 +80,18 @@ export default function CreatorsPage() {
     () => fetchCreatorIdsInRangeFromSupabase(previousFrom, previousTo, filters)
   );
 
+  // Fetch riêng, đầy đủ ContentItem (không chỉ creator_id) cho previous window - cần cho
+  // computeCreatorStats bên dưới (concentration trend + momentum leaderboard đều so views
+  // theo creator giữa 2 kỳ, previousCreatorIds ở trên không đủ vì chỉ có id, không có views).
+  const previousContent = useSWR(
+    ["vc-contents-creators-prev", previousFrom, previousTo],
+    () => fetchContentsSmart(previousFrom, previousTo, false)
+  );
+  const previousContentItems = useMemo(
+    () => filterContentItems(previousContent.data ?? [], filters),
+    [previousContent.data, filters]
+  );
+
   // Profile creator đến TỪ Supabase, do sync ở máy local cào sẵn về (sync tự
   // đăng nhập VC API - xem lib/vcAuth.ts). Trình duyệt không gọi VC API nữa:
   // API đó chỉ nhận IP whitelist/VPN nên người xem dashboard không gọi được.
@@ -127,9 +139,12 @@ export default function CreatorsPage() {
 
   const pareto = useMemo(() => computeParetoAnalysis(creatorsWithTier), [creatorsWithTier]);
 
-  // Stat creator của kỳ trước (cùng cửa sổ 30 ngày đã tải sẵn cho weeklyTrend bên dưới) - dùng để
-  // so sánh rủi ro phụ thuộc giữa 2 kỳ mà không cần thêm request nào.
-  const previousCreatorStats = useMemo(() => computeCreatorStats(previousItems), [previousItems]);
+  // Stat creator của kỳ trước (từ previousContentItems ở trên - riêng với previousCreatorIds
+  // vì weeklyTrend/tierBreakdown chỉ cần biết id, còn ở đây cần views để so rủi ro phụ thuộc).
+  const previousCreatorStats = useMemo(
+    () => computeCreatorStats(previousContentItems),
+    [previousContentItems]
+  );
   const concentrationTrend = useMemo(
     () => computeConcentrationTrend(creatorsWithTier, previousCreatorStats),
     [creatorsWithTier, previousCreatorStats]
@@ -210,6 +225,7 @@ export default function CreatorsPage() {
   const refresh = () => {
     current.mutate();
     previous.mutate();
+    previousContent.mutate();
   };
 
   const selectedCreator = creatorsWithTier.find((c) => c.creatorId === selectedCreatorId) ?? null;
