@@ -10,6 +10,7 @@ import {
   type CampaignStat,
   type CampaignWatchlistRow,
   type ContentItem,
+  type CreatorPostReward,
   type EngagementCompliance,
   type HeatmapCell,
   type TagAnalysis,
@@ -69,6 +70,7 @@ const emptyCtx: CampaignInsightContext = {
   capRisks: [],
   timelines: [],
   compliance: emptyCompliance,
+  postRewards: [],
 };
 
 function ruleById(id: string) {
@@ -252,11 +254,56 @@ describe("computeCampaignHealth", () => {
 });
 
 describe("CAMPAIGN_INSIGHT_RULES", () => {
-  test("rule cần hành động (priority 0-3) luôn đứng trước rule thống kê (priority 4-8)", () => {
-    const actionIds = new Set(["cap-risk", "ending-soon", "recently-ended", "engagement-compliance"]);
+  test("rule cần hành động (priority 0-4) luôn đứng trước rule thống kê (priority 5-9)", () => {
+    const actionIds = new Set([
+      "cap-risk",
+      "ending-soon",
+      "recently-ended",
+      "engagement-compliance",
+      "post-reward-estimate",
+    ]);
     const actionPriorities = CAMPAIGN_INSIGHT_RULES.filter((r) => actionIds.has(r.id)).map((r) => r.priority);
     const statPriorities = CAMPAIGN_INSIGHT_RULES.filter((r) => !actionIds.has(r.id)).map((r) => r.priority);
     expect(Math.max(...actionPriorities)).toBeLessThan(Math.min(...statPriorities));
+  });
+
+  test("post-reward-estimate: im lặng khi không có campaign trả theo bài", () => {
+    expect(ruleById("post-reward-estimate").evaluate(emptyCtx)).toBeNull();
+  });
+
+  test("post-reward-estimate: 1 dòng/campaign, gộp theo label, báo creator vượt cap", () => {
+    const postRewards: CreatorPostReward[] = [
+      {
+        eventName: "[Thread] Đất Nước Thiên Hùng Ca",
+        label: "[Thread] Đất Nước Thiên Hùng Ca",
+        creatorId: "c1",
+        creatorName: "Creator 1",
+        totalPosts: 35,
+        validPosts: 35,
+        paidPosts: 30, // cap postsCapPerCycle = 30
+        payRate: 150_000,
+        estimatedReward: 4_500_000,
+        overCap: true,
+      },
+      {
+        eventName: "Wonder Summer - Viral Threads",
+        label: "Wonder Summer - Viral Threads",
+        creatorId: "c2",
+        creatorName: "Creator 2",
+        totalPosts: 10,
+        validPosts: 10,
+        paidPosts: 10,
+        payRate: 150_000,
+        estimatedReward: 1_500_000,
+        overCap: false,
+      },
+    ];
+    const result = ruleById("post-reward-estimate").evaluate({ ...emptyCtx, postRewards });
+    expect(Array.isArray(result)).toBe(true);
+    const lines = result as string[];
+    expect(lines).toHaveLength(2);
+    expect(lines.some((l) => l.includes("Đất Nước Thiên Hùng Ca") && l.includes("vượt cap"))).toBe(true);
+    expect(lines.some((l) => l.includes("Wonder Summer - Viral Threads") && !l.includes("vượt cap"))).toBe(true);
   });
 
   test("cap-risk: im lặng khi không campaign nào vượt cap", () => {

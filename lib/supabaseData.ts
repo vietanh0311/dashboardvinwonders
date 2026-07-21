@@ -742,3 +742,55 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
     dailyTotals: result.dailyTotals ?? [],
   };
 }
+
+// ---------------------------------------------------------------------------
+// /creators: cohort giữ chân + funnel kích hoạt (bài #1 -> #2 -> #3)
+// ---------------------------------------------------------------------------
+
+export type CreatorRetentionCohort = {
+  cohortMonth: string;
+  cohortSize: number;
+  retention: { monthOffset: number; activeCreators: number; retentionPct: number }[];
+};
+
+export type CreatorActivationFunnel = {
+  totalCreators: number;
+  reachedPost2: number;
+  reachedPost3: number;
+  medianDaysToPost2: number | null;
+  medianDaysToPost3: number | null;
+};
+
+export type CreatorLifecycleResult = {
+  cohorts: CreatorRetentionCohort[];
+  funnel: CreatorActivationFunnel;
+};
+
+const EMPTY_FUNNEL: CreatorActivationFunnel = {
+  totalCreators: 0,
+  reachedPost2: 0,
+  reachedPost3: 0,
+  medianDaysToPost2: null,
+  medianDaysToPost3: null,
+};
+
+// Toàn bộ tính toán (cohort + funnel) chạy trong SQL function creator_lifecycle_json (xem
+// supabase-migration-creator-lifecycle.sql) - cần TOÀN BỘ lịch sử published_at của mọi creator
+// (không giới hạn theo date range), kéo về Node sẽ phải tải mọi dòng is_latest=true của bảng
+// videos thay vì 1 object jsonb đã tổng hợp gọn.
+export async function computeCreatorLifecycle(): Promise<CreatorLifecycleResult> {
+  const supabase = getSupabaseAdmin();
+
+  const run = () => supabase.rpc("creator_lifecycle_json");
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
+  if (error) throw error;
+
+  const result = (data ?? {}) as { cohorts?: CreatorRetentionCohort[]; funnel?: CreatorActivationFunnel };
+  return {
+    cohorts: result.cohorts ?? [],
+    funnel: result.funnel ?? EMPTY_FUNNEL,
+  };
+}

@@ -8,6 +8,8 @@ type Props = {
   campaignsOverCapCount: number;
   campaignsEndingSoonCount: number;
   creatorAttentionCount: number;
+  duplicateContentCount: number;
+  offChannelViolationCount: number;
 };
 
 export default function AttentionSummaryCards({
@@ -16,6 +18,8 @@ export default function AttentionSummaryCards({
   campaignsOverCapCount,
   campaignsEndingSoonCount,
   creatorAttentionCount,
+  duplicateContentCount,
+  offChannelViolationCount,
 }: Props) {
   const cards = [
     {
@@ -42,12 +46,24 @@ export default function AttentionSummaryCards({
       hint: "Vướng thanh toán hoặc ngôi sao im hơi",
       alert: creatorAttentionCount > 0,
     },
+    {
+      label: "Link nộp trùng lặp",
+      value: formatNumber(duplicateContentCount),
+      hint: "Cùng 1 link ở nhiều lượt nộp",
+      alert: duplicateContentCount > 0,
+    },
+    {
+      label: "Vi phạm kênh đăng",
+      value: formatNumber(offChannelViolationCount),
+      hint: "Đăng ngoài kênh TikTok đã liên kết",
+      alert: offChannelViolationCount > 0,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
       {isLoading &&
-        Array.from({ length: 4 }).map((_, i) => (
+        Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-24 animate-pulse rounded-xl border border-emerald-100 bg-emerald-50/50" />
         ))}
 

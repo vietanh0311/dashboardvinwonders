@@ -4,6 +4,7 @@
 // VC Creator Admin API thật (https://vcreator-admin-api.koc.com.vn).
 
 import {
+  type CampaignRule,
   CAMPAIGN_RULES,
   ENGAGEMENT_CHECK_MIN_VIEWS,
   THREADS_DISCUSSION_MIN_COMMENT_RATIO,
@@ -939,6 +940,62 @@ export function computeCreatorChannelsSummary(
   return { linkedChannel, postedChannels, offChannelWarning };
 }
 
+// ---------------------------------------------------------------------------
+// Báo cáo vi phạm đăng ngoài kênh liên kết - tổng hợp CROSS-CREATOR từ offChannelWarning (hiện
+// chỉ hiện dạng chip nhỏ trên từng dòng CreatorTable, chưa có báo cáo tổng hợp/xếp hạng nào).
+// Quy đổi ra video/views/cash cụ thể bị ảnh hưởng để BTC biết mức độ nghiêm trọng, không chỉ
+// 1 cờ true/false. Dùng cho /actions.
+// ---------------------------------------------------------------------------
+
+export type OffChannelViolation = {
+  creatorId: string;
+  creatorName: string;
+  workplaceUnitName?: string;
+  linkedUsername: string;
+  unauthorizedChannels: { username: string; videos: number }[];
+  videosAffected: number;
+  viewsAffected: number;
+  cashAffected: number;
+};
+
+export function computeOffChannelViolations(
+  itemsByCreator: Map<string, ContentItem[]>,
+  profiles: Map<string, UserDetail>
+): OffChannelViolation[] {
+  const violations: OffChannelViolation[] = [];
+
+  itemsByCreator.forEach((creatorItems, creatorId) => {
+    const profile = profiles.get(creatorId);
+    const summary = computeCreatorChannelsSummary(creatorItems, profile);
+    if (!summary.offChannelWarning || !summary.linkedChannel) return;
+
+    const linkedUsername = summary.linkedChannel.username!.toLowerCase();
+    const unauthorized = summary.postedChannels.filter(
+      (c) => c.platform === "tiktok" && !!c.username && c.username.toLowerCase() !== linkedUsername
+    );
+    if (unauthorized.length === 0) return;
+
+    const unauthorizedUsernames = new Set(unauthorized.map((c) => c.username!.toLowerCase()));
+    const affectedItems = creatorItems.filter((it) => {
+      const ch = getResolvedChannel(it);
+      return ch.platform === "tiktok" && !!ch.username && unauthorizedUsernames.has(ch.username.toLowerCase());
+    });
+
+    violations.push({
+      creatorId,
+      creatorName: creatorItems[0]?.createdBy?.name ?? "-",
+      workplaceUnitName: creatorItems[0]?.createdBy?.workplaceUnitName,
+      linkedUsername: summary.linkedChannel.username!,
+      unauthorizedChannels: unauthorized.map((c) => ({ username: c.username!, videos: c.videos })),
+      videosAffected: affectedItems.length,
+      viewsAffected: affectedItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0),
+      cashAffected: affectedItems.reduce((sum, it) => sum + (it.statistic?.cash?.total ?? 0), 0),
+    });
+  });
+
+  return violations.sort((a, b) => b.cashAffected - a.cashAffected || b.viewsAffected - a.viewsAffected);
+}
+
 // Số ngày kể từ 1 mốc ISO tới hiện tại (dùng cho cờ lọc "không hoạt động >30 ngày").
 export function daysSince(isoString?: string): number | null {
   if (!isoString) return null;
@@ -1555,6 +1612,143 @@ export function computeUnitComparison(creators: CreatorStat[]): UnitComparisonRo
 }
 
 // ---------------------------------------------------------------------------
+// Facility scorecard: xếp hạng cơ sở bằng điểm tổng hợp (views TB/video, engagement, hiệu quả
+// CPV) + xu hướng so kỳ trước - khác UnitComparisonTable (chỉ liệt kê số liệu thô, không xếp
+// hạng/không xu hướng). Tái dùng previousCreatorStats đã tải sẵn ở /creators cho concentration
+// trend/momentum - không cần thêm request nào.
+// ---------------------------------------------------------------------------
+
+export type FacilityTrend = "new" | "improving" | "declining" | "steady";
+
+export type FacilityScorecardRow = {
+  unitName: string;
+  creators: number;
+  videos: number;
+  totalViews: number;
+  avgViewsPerVideo: number;
+  engagementRate: number;
+  cpv: number;
+  hasCashData: boolean;
+  score: number; // 0-100, càng cao càng tốt
+  rank: number;
+  viewsDeltaPct: number; // so kỳ trước; Infinity nếu kỳ trước = 0 và kỳ này > 0
+  trend: FacilityTrend;
+};
+
+type FacilityAgg = {
+  creators: Set<string>;
+  videos: number;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalCash: number;
+};
+
+function aggregateCreatorStatsByUnit(creators: CreatorStat[]): Map<string, FacilityAgg> {
+  const map = new Map<string, FacilityAgg>();
+  creators.forEach((c) => {
+    const key = c.workplaceUnitName || "Không rõ";
+    const entry = map.get(key) ?? {
+      creators: new Set<string>(),
+      videos: 0,
+      totalViews: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalCash: 0,
+    };
+    entry.creators.add(c.creatorId);
+    entry.videos += c.videos;
+    entry.totalViews += c.totalViews;
+    entry.totalLikes += c.totalLikes;
+    entry.totalComments += c.totalComments;
+    entry.totalCash += c.totalCash;
+    map.set(key, entry);
+  });
+  return map;
+}
+
+const FACILITY_TREND_THRESHOLD_PCT = 15;
+
+// currentDays/previousDays: độ dài (số ngày) của kỳ đang xem và kỳ so sánh - 2 kỳ này thường
+// KHÁC độ dài nhau (kỳ so sánh ở /creators luôn cố định 30 ngày, kỳ đang xem do người dùng chọn,
+// mặc định 7 ngày). So trực tiếp tổng views 2 kỳ sẽ luôn thiên về "giảm" chỉ vì kỳ ngắn hơn cộng
+// dồn ít views hơn kỳ dài hơn - phải quy về views/ngày trước khi so thì xu hướng mới phản ánh
+// đúng thực tế thay vì lệch có hệ thống theo độ dài kỳ.
+export function computeFacilityScorecard(
+  currentCreators: CreatorStat[],
+  previousCreators: CreatorStat[],
+  currentDays: number,
+  previousDays: number
+): FacilityScorecardRow[] {
+  const current = aggregateCreatorStatsByUnit(currentCreators);
+  if (current.size === 0) return [];
+  const previous = aggregateCreatorStatsByUnit(previousCreators);
+
+  const base = Array.from(current.entries()).map(([unitName, v]) => ({
+    unitName,
+    creators: v.creators.size,
+    videos: v.videos,
+    totalViews: v.totalViews,
+    avgViewsPerVideo: v.videos > 0 ? v.totalViews / v.videos : 0,
+    engagementRate: v.totalViews > 0 ? (v.totalLikes + v.totalComments) / v.totalViews : 0,
+    cpv: v.totalViews > 0 ? v.totalCash / v.totalViews : 0,
+    totalCash: v.totalCash,
+  }));
+
+  // Chuẩn hoá min-max giữa các cơ sở trong kỳ đang xem - điểm chỉ có ý nghĩa SO SÁNH tương đối
+  // giữa các cơ sở cùng kỳ, không phải điểm tuyệt đối theo thời gian.
+  const avgViewsMax = Math.max(...base.map((r) => r.avgViewsPerVideo), 0) || 1;
+  const engagementMax = Math.max(...base.map((r) => r.engagementRate), 0) || 1;
+  const cpvCandidates = base.filter((r) => r.totalCash > 0).map((r) => r.cpv);
+  const cpvMax = cpvCandidates.length > 0 ? Math.max(...cpvCandidates) : 0;
+  const hasCashData = cpvMax > 0;
+
+  const scored = base.map((r) => {
+    const viewsScore = (r.avgViewsPerVideo / avgViewsMax) * 100;
+    const engagementScore = (r.engagementRate / engagementMax) * 100;
+    // CPV thấp = hiệu quả cao hơn; cơ sở chưa có cash coi như trung tính (không thưởng/không phạt).
+    const efficiencyScore = r.totalCash > 0 ? (1 - r.cpv / cpvMax) * 100 : 100;
+    const score = hasCashData
+      ? viewsScore * 0.5 + engagementScore * 0.3 + efficiencyScore * 0.2
+      : viewsScore * 0.65 + engagementScore * 0.35;
+
+    const prev = previous.get(r.unitName);
+    const prevViews = prev?.totalViews ?? 0;
+    // Quy về views/ngày để so công bằng giữa 2 kỳ khác độ dài (xem giải thích ở khai báo hàm).
+    const currentDailyViews = currentDays > 0 ? r.totalViews / currentDays : r.totalViews;
+    const prevDailyViews = previousDays > 0 ? prevViews / previousDays : prevViews;
+    const viewsDeltaPct =
+      prevDailyViews > 0 ? ((currentDailyViews - prevDailyViews) / prevDailyViews) * 100 : currentDailyViews > 0 ? Infinity : 0;
+    const trend: FacilityTrend =
+      prevViews === 0 && r.totalViews > 0
+        ? "new"
+        : viewsDeltaPct >= FACILITY_TREND_THRESHOLD_PCT
+          ? "improving"
+          : viewsDeltaPct <= -FACILITY_TREND_THRESHOLD_PCT
+            ? "declining"
+            : "steady";
+
+    return {
+      unitName: r.unitName,
+      creators: r.creators,
+      videos: r.videos,
+      totalViews: r.totalViews,
+      avgViewsPerVideo: r.avgViewsPerVideo,
+      engagementRate: r.engagementRate,
+      cpv: r.cpv,
+      hasCashData,
+      score: Math.round(score * 10) / 10,
+      viewsDeltaPct,
+      trend,
+    };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+// ---------------------------------------------------------------------------
 // Xếp hạng creator theo CPV (chi phí/view) - ai đang chi hiệu quả nhất/kém
 // nhất. Chỉ xét creator có cash & đủ views để tránh nhiễu do mẫu quá nhỏ.
 // ---------------------------------------------------------------------------
@@ -1930,6 +2124,68 @@ export function computePublishHeatmapBySource(items: ContentItem[]): SourceHeatm
 }
 
 // ---------------------------------------------------------------------------
+// Khung giờ vàng theo cơ sở/tier: khác PublishHeatmap (cắt theo nền tảng, hiển thị lưới đầy đủ)
+// - cắt theo trục tổ chức (cơ sở/tier creator) và chỉ trả về 1 khuyến nghị gọn/nhóm (không render
+// lưới 7x24 cho từng nhóm, tránh phình DOM khi có nhiều cơ sở). Tái dùng computePublishHeatmap +
+// pickBestHeatmapCell đã có sẵn, chỉ đổi cách gom nhóm.
+// ---------------------------------------------------------------------------
+
+export type PostingTimeGroup = {
+  key: string;
+  label: string;
+  totalVideos: number;
+  best: HeatmapCell | null;
+  avgViews: number; // avg views/video của cả nhóm (mẫu số để so "lift" ở khung giờ vàng)
+};
+
+function computeBestPostingTimeByGroup(
+  items: ContentItem[],
+  keyOf: (item: ContentItem) => string | undefined,
+  labelOf: (key: string) => string
+): PostingTimeGroup[] {
+  const byGroup = new Map<string, ContentItem[]>();
+  items.forEach((item) => {
+    const key = keyOf(item);
+    if (!key) return;
+    const arr = byGroup.get(key) ?? [];
+    arr.push(item);
+    byGroup.set(key, arr);
+  });
+
+  return Array.from(byGroup.entries())
+    .map(([key, groupItems]) => {
+      const totalViews = groupItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0);
+      return {
+        key,
+        label: labelOf(key),
+        totalVideos: groupItems.length,
+        best: pickBestHeatmapCell(computePublishHeatmap(groupItems)),
+        avgViews: groupItems.length > 0 ? totalViews / groupItems.length : 0,
+      };
+    })
+    .sort((a, b) => b.totalVideos - a.totalVideos);
+}
+
+export function computeBestPostingTimeByFacility(items: ContentItem[]): PostingTimeGroup[] {
+  return computeBestPostingTimeByGroup(
+    items,
+    (it) => it.createdBy?.workplaceUnitName || undefined,
+    (key) => key
+  );
+}
+
+export function computeBestPostingTimeByTier(
+  items: ContentItem[],
+  creatorTierMap: Map<string, CreatorTier>
+): PostingTimeGroup[] {
+  return computeBestPostingTimeByGroup(
+    items,
+    (it) => (it.createdBy?._id ? creatorTierMap.get(it.createdBy._id) : undefined),
+    (key) => CREATOR_TIER_LABEL[key as CreatorTier] ?? key
+  );
+}
+
+// ---------------------------------------------------------------------------
 // So sánh nền tảng (source): % video, % views, avg views, engagement rate.
 // ---------------------------------------------------------------------------
 
@@ -2002,6 +2258,15 @@ export type CampaignStat = {
 // Nếu backend dùng giá trị khác, chỉnh lại regex này.
 function isRejectedStatus(status: string): boolean {
   return /reject|denied|từ chối/i.test(status ?? "");
+}
+
+// "Được duyệt" = đã approved thật sự - KHÁC với "chưa bị từ chối" (isRejectedStatus ở trên).
+// Dữ liệu thực tế có 3 giá trị status: approved/rejected/waiting_approved - bài đang
+// waiting_approved (chờ duyệt, ~6-9% tổng số bài Threads) chưa "được duyệt" nên KHÔNG được tính
+// vào hợp lệ dù chưa bị từ chối (có thể vẫn bị từ chối sau). Dùng riêng cho logic tính thưởng
+// (computeCreatorPostRewards), không dùng để thay isRejectedStatus ở chỗ khác.
+function isApprovedStatus(status: string): boolean {
+  return /^approved$/i.test((status ?? "").trim());
 }
 
 export function computeCampaignStats(items: ContentItem[]): CampaignStat[] {
@@ -2209,6 +2474,60 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
 }
 
 // ---------------------------------------------------------------------------
+// Xếp hạng HIỆU QUẢ theo tag (warningTags) - khác TagAnalysisTable/computeTagAnalysis (xếp theo
+// SỐ LƯỢNG video + cảnh báo tăng đột biến tuần): ở đây xếp theo avg views/engagement, kèm % lift
+// so với trung bình chung và cờ độ tin cậy theo cỡ mẫu - trả lời "nội dung/tag nào nên đẩy mạnh,
+// tag nào nên giảm" thay vì chỉ mô tả khối lượng.
+// ---------------------------------------------------------------------------
+
+const TAG_PERFORMANCE_MIN_SAMPLE = 5; // dưới ngưỡng này vẫn hiển thị nhưng gắn cờ "mẫu nhỏ"
+
+export type TagPerformanceRow = {
+  name: string;
+  videos: number;
+  avgViews: number;
+  engagementRate: number;
+  liftVsOverallPct: number; // dương = tốt hơn trung bình chung, âm = kém hơn
+  confidence: "low" | "high";
+};
+
+export function computeTagPerformanceRanking(items: ContentItem[]): TagPerformanceRow[] {
+  const overallViews = items.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0);
+  const overallAvgViews = items.length > 0 ? overallViews / items.length : 0;
+
+  const map = new Map<string, { videos: number; totalViews: number; totalLikes: number; totalComments: number }>();
+  items.forEach((item) => {
+    const views = item.statistic?.view?.total ?? 0;
+    const likes = item.statistic?.like?.total ?? 0;
+    const comments = item.statistic?.comment?.total ?? 0;
+
+    (item.warningTags ?? []).forEach((tag) => {
+      if (!tag?.name || AI_AUTO_TAGS.has(tag.name)) return;
+      const entry = map.get(tag.name) ?? { videos: 0, totalViews: 0, totalLikes: 0, totalComments: 0 };
+      entry.videos += 1;
+      entry.totalViews += views;
+      entry.totalLikes += likes;
+      entry.totalComments += comments;
+      map.set(tag.name, entry);
+    });
+  });
+
+  return Array.from(map.entries())
+    .map(([name, v]) => {
+      const avgViews = v.videos > 0 ? v.totalViews / v.videos : 0;
+      return {
+        name,
+        videos: v.videos,
+        avgViews,
+        engagementRate: v.totalViews > 0 ? (v.totalLikes + v.totalComments) / v.totalViews : 0,
+        liftVsOverallPct: overallAvgViews > 0 ? ((avgViews - overallAvgViews) / overallAvgViews) * 100 : 0,
+        confidence: (v.videos >= TAG_PERFORMANCE_MIN_SAMPLE ? "high" : "low") as "low" | "high",
+      };
+    })
+    .sort((a, b) => b.avgViews - a.avgViews);
+}
+
+// ---------------------------------------------------------------------------
 // Compliance với thể lệ chương trình thật (xem lib/campaignRules.ts): tương tác/comment tối
 // thiểu, cap views/video theo từng campaign, và countdown thời gian chương trình.
 // ---------------------------------------------------------------------------
@@ -2279,6 +2598,82 @@ export function computeEngagementCompliance(items: ContentItem[]): EngagementCom
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phát hiện link trùng lặp: cùng 1 link video (chuẩn hoá bỏ query/protocol/www) xuất hiện ở
+// >=2 content_id - có thể là 1 creator nộp lại nhiều lần (double-dip nhiều campaign) hoặc nhiều
+// creator cùng nộp 1 link (đăng lại/nhận vơ nội dung người khác). Năng lực hoàn toàn mới, chưa có
+// module nào kiểm tra tính toàn vẹn của link nộp.
+// ---------------------------------------------------------------------------
+
+export type DuplicateContentItem = {
+  contentId: string;
+  creatorId: string;
+  creatorName: string;
+  eventName: string;
+  publishedAt: string;
+  views: number;
+  cash: number;
+};
+
+export type DuplicateContentGroup = {
+  normalizedLink: string;
+  sampleLink: string;
+  submissions: number;
+  creators: number;
+  totalViews: number;
+  totalCash: number;
+  items: DuplicateContentItem[];
+};
+
+function normalizeLink(link: string): string {
+  try {
+    const url = new URL(link);
+    const path = url.pathname.replace(/\/+$/, "");
+    return `${url.hostname.replace(/^www\./, "")}${path}`.toLowerCase();
+  } catch {
+    return link.trim().toLowerCase();
+  }
+}
+
+export function computeDuplicateContent(items: ContentItem[]): DuplicateContentGroup[] {
+  const map = new Map<string, ContentItem[]>();
+  items.forEach((item) => {
+    if (!item.link) return;
+    const key = normalizeLink(item.link);
+    const arr = map.get(key) ?? [];
+    arr.push(item);
+    map.set(key, arr);
+  });
+
+  const groups: DuplicateContentGroup[] = [];
+  map.forEach((groupItems, normalizedLink) => {
+    if (groupItems.length < 2) return; // chỉ giữ nhóm thực sự trùng lặp
+
+    const creators = new Set(groupItems.map((it) => it.createdBy?._id).filter(Boolean));
+    groups.push({
+      normalizedLink,
+      sampleLink: groupItems[0].link,
+      submissions: groupItems.length,
+      creators: creators.size,
+      totalViews: groupItems.reduce((sum, it) => sum + (it.statistic?.view?.total ?? 0), 0),
+      totalCash: groupItems.reduce((sum, it) => sum + (it.statistic?.cash?.total ?? 0), 0),
+      items: groupItems
+        .map((it) => ({
+          contentId: it._id,
+          creatorId: it.createdBy?._id ?? "",
+          creatorName: it.createdBy?.name ?? "-",
+          eventName: it.event?.name ?? "-",
+          publishedAt: it.publishedAt || it.createdAt,
+          views: it.statistic?.view?.total ?? 0,
+          cash: it.statistic?.cash?.total ?? 0,
+        }))
+        .sort((a, b) => (a.publishedAt < b.publishedAt ? -1 : 1)),
+    });
+  });
+
+  return groups.sort((a, b) => b.totalCash - a.totalCash || b.submissions - a.submissions);
+}
+
 export type CampaignCapRisk = {
   eventName: string;
   label: string;
@@ -2289,7 +2684,8 @@ export type CampaignCapRisk = {
 };
 
 // Chỉ áp dụng cho campaign trả thưởng theo view (unit "view") có viewCapPerVideo - campaign
-// dạng "post" (Threads) trả theo bài, không có khái niệm cap/view nên bỏ qua.
+// dạng "post" (Threads) trả theo bài, dùng computeCreatorPostRewards() riêng (cap theo
+// postsCapPerCycle/creator/kỳ, không phải theo view/video).
 //
 // QUAN TRỌNG: cap này chỉ có ý nghĩa khi BTC đối soát/trả thưởng cho creator - không được dùng
 // để cắt/điều chỉnh views hay bất kỳ số liệu nào khác hiển thị trên dashboard (KPI, CPV,
@@ -2352,7 +2748,7 @@ function dateKeyToUtcMs(dateStr: string): number {
   return Date.UTC(year, month - 1, day); // Date.UTC dùng month 0-based, chuỗi ngày là 1-based
 }
 
-function diffDaysUtc(fromDateStr: string, toDateStr: string): number {
+export function diffDaysUtc(fromDateStr: string, toDateStr: string): number {
   return Math.round((dateKeyToUtcMs(toDateStr) - dateKeyToUtcMs(fromDateStr)) / (24 * 60 * 60 * 1000));
 }
 
@@ -2466,6 +2862,84 @@ export function computeCampaignHealth(
   return "stable";
 }
 
+// ---------------------------------------------------------------------------
+// Thưởng ước tính cho campaign trả theo bài (unit "post" - hiện là các campaign Threads, xem
+// CAMPAIGN_RULES trong lib/campaignRules.ts).
+// ---------------------------------------------------------------------------
+
+export type CreatorPostReward = {
+  eventName: string;
+  label: string;
+  creatorId: string;
+  creatorName: string;
+  totalPosts: number;
+  validPosts: number; // hợp lệ = status approved thật (xem isApprovedStatus) - không tính waiting_approved/rejected
+  paidPosts: number; // validPosts đã cap theo postsCapPerCycle/creator/kỳ (nếu thể lệ quy định)
+  payRate: number;
+  estimatedReward: number; // paidPosts * payRate
+  overCap: boolean; // validPosts vượt cap - phần vượt không được tính thưởng thêm
+};
+
+// Logic cơ bản theo thể lệ: mỗi bài hợp lệ ĐÃ được duyệt (status approved thật - xem
+// isApprovedStatus, KHÔNG tính bài đang waiting_approved) = payRate của thể lệ (vd 150.000đ/bài
+// cho Threads), cap theo postsCapPerCycle/creator/kỳ nếu thể lệ có quy định - phần vượt cap
+// không được tính thêm. Đây là số ƯỚC TÍNH bám theo thể lệ đã cấu hình trong CAMPAIGN_RULES,
+// KHÔNG thay thế statistic.cash.total thật do BTC đối soát trả (xem ghi chú đầu
+// lib/campaignRules.ts) - dùng để đối chiếu/tham khảo, không phải số liệu chính thức.
+export function computeCreatorPostRewards(items: ContentItem[]): CreatorPostReward[] {
+  type Group = {
+    rule: CampaignRule;
+    eventName: string;
+    creatorId: string;
+    creatorName: string;
+    items: ContentItem[];
+  };
+  const byGroup = new Map<string, Group>();
+
+  items.forEach((item) => {
+    const eventName = item.event?.name;
+    const creatorId = item.createdBy?._id;
+    if (!eventName || !creatorId) return;
+
+    const rule = matchCampaignRule(eventName);
+    if (!rule || rule.unit !== "post") return;
+
+    const key = `${eventName}::${creatorId}`;
+    const entry = byGroup.get(key) ?? {
+      rule,
+      eventName,
+      creatorId,
+      creatorName: item.createdBy?.name ?? "-",
+      items: [],
+    };
+    entry.items.push(item);
+    byGroup.set(key, entry);
+  });
+
+  const results: CreatorPostReward[] = [];
+  byGroup.forEach(({ rule, eventName, creatorId, creatorName, items: groupItems }) => {
+    const totalPosts = groupItems.length;
+    const validPosts = groupItems.filter((it) => isApprovedStatus(it.status)).length;
+    const cap = rule.postsCapPerCycle ?? Infinity;
+    const paidPosts = Math.min(validPosts, cap);
+
+    results.push({
+      eventName,
+      label: rule.label,
+      creatorId,
+      creatorName,
+      totalPosts,
+      validPosts,
+      paidPosts,
+      payRate: rule.payRate,
+      estimatedReward: paidPosts * rule.payRate,
+      overCap: validPosts > cap,
+    });
+  });
+
+  return results.sort((a, b) => b.estimatedReward - a.estimatedReward);
+}
+
 function formatDateVi(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
@@ -2483,15 +2957,18 @@ export type CampaignInsightContext = {
   capRisks: CampaignCapRisk[];
   timelines: CampaignTimeline[];
   compliance: EngagementCompliance;
+  postRewards: CreatorPostReward[];
 };
 
 export type CampaignInsightRule = {
   id: string;
   // Rule priority thấp hơn được ưu tiên giữ lại khi insights bị cắt còn 6 dòng (xem slice cuối
-  // generateCampaignInsights) - nhóm "cần hành động" (0-3: cap risk, timeline, engagement) phải
-  // luôn thắng nhóm thống kê chung (4-8) khi có quá 6 insight ứng với kỳ đang xem.
+  // generateCampaignInsights) - nhóm "cần hành động" (0-4: cap risk, timeline, engagement, thưởng
+  // ước tính) phải luôn thắng nhóm thống kê chung (5-9) khi có quá 6 insight ứng với kỳ đang xem.
   priority: number;
-  evaluate: (ctx: CampaignInsightContext) => string | null;
+  // string[] cho rule có thể sinh nhiều dòng (vd 1 dòng/campaign như post-reward-estimate) -
+  // đa số rule chỉ trả 1 string hoặc null.
+  evaluate: (ctx: CampaignInsightContext) => string | string[] | null;
 };
 
 // Mỗi rule là 1 hàm pure độc lập - test được riêng từng rule bằng 1 context giả lập, không cần
@@ -2556,8 +3033,35 @@ export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
     },
   },
   {
-    id: "cpv-spread",
+    id: "post-reward-estimate",
     priority: 4,
+    // Thưởng ước tính theo bài (Threads) - creator vượt cap bài hợp lệ/kỳ sẽ không được tính
+    // thưởng thêm cho phần vượt. 1 dòng/campaign (unit "post") có dữ liệu trong kỳ đang xem.
+    evaluate: ({ postRewards }) => {
+      if (postRewards.length === 0) return null;
+      const byLabel = new Map<string, { total: number; creators: number; overCap: number; payRate: number }>();
+      postRewards.forEach((r) => {
+        const entry = byLabel.get(r.label) ?? { total: 0, creators: 0, overCap: 0, payRate: r.payRate };
+        entry.total += r.estimatedReward;
+        entry.creators += 1;
+        if (r.overCap) entry.overCap += 1;
+        byLabel.set(r.label, entry);
+      });
+
+      return Array.from(byLabel.entries()).map(([label, v]) => {
+        const overCapNote =
+          v.overCap > 0
+            ? ` - ${formatNumber(v.overCap)} creator đã vượt cap bài hợp lệ/kỳ, phần vượt không được tính thêm`
+            : "";
+        return `Thưởng ước tính campaign "${label}": ${formatCurrency(v.total)} cho ${formatNumber(
+          v.creators
+        )} creator (${formatCurrency(v.payRate)}/bài hợp lệ được duyệt)${overCapNote}.`;
+      });
+    },
+  },
+  {
+    id: "cpv-spread",
+    priority: 5,
     // Chênh lệch CPV giữa 2 campaign xa nhau nhất.
     evaluate: ({ campaigns }) => {
       const withCash = campaigns.filter((c) => c.totalCash > 0 && c.totalViews > 0);
@@ -2574,7 +3078,7 @@ export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
   },
   {
     id: "best-heatmap-slot",
-    priority: 5,
+    priority: 6,
     // Khung giờ đăng tốt nhất (đủ mẫu, xem HEATMAP_MIN_SAMPLE) so với avg views toàn hệ (= mean).
     evaluate: ({ heatmap, viewDist }) => {
       const best = pickBestHeatmapCell(heatmap);
@@ -2590,7 +3094,7 @@ export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
   },
   {
     id: "flop-pct",
-    priority: 6,
+    priority: 7,
     // % video flop.
     evaluate: ({ viewDist }) => {
       if (viewDist.flopPct <= 0) return null;
@@ -2599,7 +3103,7 @@ export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
   },
   {
     id: "tag-anomaly",
-    priority: 7,
+    priority: 8,
     // Tag tăng đột biến tuần này.
     evaluate: ({ tagAnalysis }) => {
       const anomalousTags = tagAnalysis.filter((t) => t.isAnomalous);
@@ -2610,7 +3114,7 @@ export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
   },
   {
     id: "view-skew",
-    priority: 8,
+    priority: 9,
     // Phân phối views lệch nhiều (mean >> median) - phụ thuộc video viral.
     evaluate: ({ viewDist }) => {
       if (viewDist.median <= 0 || viewDist.mean <= viewDist.median * 2) return null;
@@ -2639,12 +3143,16 @@ export function generateCampaignInsights(
     capRisks: computeCampaignCapRisks(items),
     timelines: computeCampaignTimelines(items, referenceDate),
     compliance: computeEngagementCompliance(items),
+    postRewards: computeCreatorPostRewards(items),
   };
 
   return CAMPAIGN_INSIGHT_RULES.slice()
     .sort((a, b) => a.priority - b.priority)
-    .map((rule) => rule.evaluate(ctx))
-    .filter((text): text is string => text !== null)
+    .flatMap((rule) => {
+      const result = rule.evaluate(ctx);
+      if (result === null) return [];
+      return Array.isArray(result) ? result : [result];
+    })
     .slice(0, 6);
 }
 
@@ -2921,6 +3429,61 @@ export async function fetchTrends(windowDays = 14): Promise<TrendsResult> {
       lastWeek: data.weekOverWeek?.lastWeek ?? EMPTY_PERIOD_METRICS,
     },
     dailyTotals: Array.isArray(data.dailyTotals) ? data.dailyTotals : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Vòng đời creator: cohort giữ chân theo tháng đăng bài đầu tiên + funnel kích hoạt (bài #1 ->
+// #2 -> #3). Toàn bộ tính trong SQL (creator_lifecycle_json, xem supabase-migration-creator-
+// lifecycle.sql) vì cần TOÀN BỘ lịch sử creator (không giới hạn theo date range đang xem trên
+// trang) - khác các module khác ở /creators vốn tái dùng dữ liệu đã tải theo range.
+//
+// TODO: "onboarding funnel" đúng nghĩa (mời tham gia -> đăng ký -> bài đầu tiên) cần mốc ngày
+// đăng ký/tham gia chương trình, nhưng hệ thống hiện KHÔNG lưu mốc này - creator chỉ được ghi
+// nhận vào bảng creators khi sync phát hiện qua video của họ (xem upsertCreatorRows trong
+// lib/supabaseData.ts), tức là luôn SAU hoặc CÙNG lúc bài đầu tiên. fetchCreatorLifecycle() vì
+// vậy đo funnel từ bài #1 (proxy tốt nhất hiện có: tốc độ "kích hoạt" sau lần đăng đầu) thay vì
+// từ lúc gia nhập. Nếu sau này VC API bổ sung field ngày đăng ký, nên mở rộng funnel thêm bước
+// "đăng ký -> bài #1".
+// ---------------------------------------------------------------------------
+
+export type CreatorRetentionCohort = {
+  cohortMonth: string; // yyyy-MM
+  cohortSize: number;
+  retention: { monthOffset: number; activeCreators: number; retentionPct: number }[];
+};
+
+export type CreatorActivationFunnel = {
+  totalCreators: number;
+  reachedPost2: number;
+  reachedPost3: number;
+  medianDaysToPost2: number | null;
+  medianDaysToPost3: number | null;
+};
+
+export type CreatorLifecycleResult = {
+  cohorts: CreatorRetentionCohort[];
+  funnel: CreatorActivationFunnel;
+};
+
+const EMPTY_CREATOR_LIFECYCLE: CreatorLifecycleResult = {
+  cohorts: [],
+  funnel: {
+    totalCreators: 0,
+    reachedPost2: 0,
+    reachedPost3: 0,
+    medianDaysToPost2: null,
+    medianDaysToPost3: null,
+  },
+};
+
+export async function fetchCreatorLifecycle(): Promise<CreatorLifecycleResult> {
+  const res = await jsonFetch<{ data?: Partial<CreatorLifecycleResult> | null }>("/api/data/creator-lifecycle");
+  const data = res?.data;
+  if (!data) return EMPTY_CREATOR_LIFECYCLE;
+  return {
+    cohorts: Array.isArray(data.cohorts) ? data.cohorts : [],
+    funnel: data.funnel ?? EMPTY_CREATOR_LIFECYCLE.funnel,
   };
 }
 

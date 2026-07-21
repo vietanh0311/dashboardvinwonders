@@ -10,31 +10,38 @@ import CreatorSearch from "@/components/CreatorSearch";
 import CreatorTable from "@/components/CreatorTable";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
+import FacilityScorecard from "@/components/FacilityScorecard";
 import InsightsPanel from "@/components/InsightsPanel";
 import DataErrorBanner from "@/components/DataErrorBanner";
 import MomentumLeaderboardCard from "@/components/MomentumLeaderboardCard";
 import Nav from "@/components/Nav";
+import OnboardingFunnelCard from "@/components/OnboardingFunnelCard";
+import PostingTimeByGroupTable from "@/components/PostingTimeByGroupTable";
 import RefreshIndicator from "@/components/RefreshIndicator";
 import NewReturningChart from "@/components/NewReturningChart";
 import ParetoChart from "@/components/ParetoChart";
+import RetentionCohortTable from "@/components/RetentionCohortTable";
 import TierBreakdownTable from "@/components/TierBreakdownTable";
-import UnitComparisonTable from "@/components/UnitComparisonTable";
 import {
   addDaysToVnDate,
   classifyCreatorTiers,
+  computeBestPostingTimeByFacility,
+  computeBestPostingTimeByTier,
   computeConcentrationTrend,
   computeCpvRanking,
   computeCreatorChannelsSummary,
   computeCreatorStats,
+  computeFacilityScorecard,
   computeMomentumLeaderboard,
   computeNewVsReturning,
   computeParetoAnalysis,
   computeTierBreakdown,
-  computeUnitComparison,
   countVnWeeksInRange,
   daysSince,
+  diffDaysUtc,
   fetchContentsSmart,
   fetchCreatorIdsInRangeFromSupabase,
+  fetchCreatorLifecycle,
   fetchCreatorProfilesFromSupabase,
   filterContentItems,
   generateCreatorInsights,
@@ -43,6 +50,7 @@ import {
   type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
+  type CreatorTier,
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
@@ -100,6 +108,10 @@ export default function CreatorsPage() {
     () => supabaseCreators.data ?? new Map<string, UserDetail>(),
     [supabaseCreators.data]
   );
+
+  // Cohort giữ chân + funnel kích hoạt dùng TOÀN BỘ lịch sử creator (không theo range đang xem) -
+  // fetch độc lập, không chặn phần còn lại của trang trong lúc tải.
+  const lifecycle = useSWR("vc-creator-lifecycle", fetchCreatorLifecycle, { revalidateOnFocus: false });
 
   // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
   // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
@@ -165,7 +177,22 @@ export default function CreatorsPage() {
     [creatorsWithTier, previousCreatorIds]
   );
 
-  const unitComparison = useMemo(() => computeUnitComparison(creatorsWithTier), [creatorsWithTier]);
+  const currentRangeDays = diffDaysUtc(range.from, range.to) + 1;
+  const previousRangeDays = diffDaysUtc(previousFrom, previousTo) + 1;
+  const facilityScorecard = useMemo(
+    () => computeFacilityScorecard(creatorsWithTier, previousCreatorStats, currentRangeDays, previousRangeDays),
+    [creatorsWithTier, previousCreatorStats, currentRangeDays, previousRangeDays]
+  );
+
+  const creatorTierMap = useMemo(
+    () => new Map<string, CreatorTier>(creatorsWithTier.map((c) => [c.creatorId, c.tier])),
+    [creatorsWithTier]
+  );
+  const postingTimeByFacility = useMemo(() => computeBestPostingTimeByFacility(currentItems), [currentItems]);
+  const postingTimeByTier = useMemo(
+    () => computeBestPostingTimeByTier(currentItems, creatorTierMap),
+    [currentItems, creatorTierMap]
+  );
 
   const cpvRanking = useMemo(() => computeCpvRanking(creatorsWithTier), [creatorsWithTier]);
 
@@ -326,10 +353,28 @@ export default function CreatorsPage() {
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <TierBreakdownTable isLoading={isLoadingCompare} data={tierBreakdown} />
-          <UnitComparisonTable isLoading={isLoading} data={unitComparison} />
+          <FacilityScorecard isLoading={isLoading} data={facilityScorecard} />
         </div>
 
+        <PostingTimeByGroupTable isLoading={isLoading} byFacility={postingTimeByFacility} byTier={postingTimeByTier} />
+
         <CpvRankingPanel isLoading={isLoading} data={cpvRanking} onSelectCreator={setSelectedCreatorId} />
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <RetentionCohortTable isLoading={!lifecycle.data} data={lifecycle.data?.cohorts ?? []} />
+          <OnboardingFunnelCard
+            isLoading={!lifecycle.data}
+            data={
+              lifecycle.data?.funnel ?? {
+                totalCreators: 0,
+                reachedPost2: 0,
+                reachedPost3: 0,
+                medianDaysToPost2: null,
+                medianDaysToPost3: null,
+              }
+            }
+          />
+        </div>
         </div>
       </div>
 

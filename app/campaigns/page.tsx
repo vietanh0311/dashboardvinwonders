@@ -17,6 +17,7 @@ import RefreshIndicator from "@/components/RefreshIndicator";
 import PublishHeatmap from "@/components/PublishHeatmap";
 import SourceComparisonTable from "@/components/SourceComparisonTable";
 import TagAnalysisTable from "@/components/TagAnalysisTable";
+import TagPerformanceRankingTable from "@/components/TagPerformanceRankingTable";
 import TopVideosCard from "@/components/TopVideosCard";
 import ViewDistributionPanel from "@/components/ViewDistributionPanel";
 import {
@@ -28,6 +29,7 @@ import {
   computePublishHeatmapBySource,
   computeSourceComparison,
   computeTagAnalysis,
+  computeTagPerformanceRanking,
   computeViewDistribution,
   fetchContentsSmart,
   fetchEventsSmart,
@@ -99,6 +101,7 @@ export default function CampaignsPage() {
   const sourceComparison = useMemo(() => computeSourceComparison(items), [items]);
   const campaignStats = useMemo(() => computeCampaignStats(items), [items]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(items), [items]);
+  const tagPerformance = useMemo(() => computeTagPerformanceRanking(items), [items]);
   // Cap-risk + countdown theo từng campaign - cùng logic đang phục vụ /actions (CampaignWatchlistTable),
   // dùng ở đây cho KPI "Cần chú ý" và health badge trên CampaignTable.
   const watchlist = useMemo(() => computeCampaignWatchlist(items, referenceDate), [items, referenceDate]);
@@ -201,6 +204,8 @@ export default function CampaignsPage() {
           />
 
           <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
+
+          <TagPerformanceRankingTable isLoading={isLoading} data={tagPerformance} />
 
           <TagAnalysisTable isLoading={isLoading} data={tagAnalysis} />
         </div>
