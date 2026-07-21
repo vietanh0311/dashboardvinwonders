@@ -19,7 +19,9 @@ const selectClass =
 export default function ContentFilters({ items, value, onChange }: Props) {
   const options = useMemo(() => extractFilterOptions(items), [items]);
 
-  const hasActiveFilter = !!(value.source || value.eventName || value.tagName || value.workplaceUnit);
+  const activeFilterCount = [value.source, value.eventName, value.tagName, value.workplaceUnit].filter(
+    Boolean
+  ).length;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -60,13 +62,13 @@ export default function ContentFilters({ items, value, onChange }: Props) {
         onChange={(workplaceUnit) => onChange({ ...value, workplaceUnit })}
       />
 
-      {hasActiveFilter && (
+      {activeFilterCount > 0 && (
         <button
           type="button"
           onClick={() => onChange({})}
           className="whitespace-nowrap rounded-md px-2 py-2 text-xs font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
         >
-          Xoá filter
+          Xoá {activeFilterCount} filter
         </button>
       )}
     </div>

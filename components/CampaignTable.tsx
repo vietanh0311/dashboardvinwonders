@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatCurrency, formatNumber, formatPercent, type CampaignStat } from "@/lib/api";
+import {
+  computeCampaignHealth,
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  type CampaignHealthStatus,
+  type CampaignStat,
+  type CampaignWatchlistRow,
+} from "@/lib/api";
 
 // Phân trang client-side để tránh render toàn bộ hàng đã sort vào DOM (giật
 // khi sort/lọc lại trên danh sách campaign lớn).
@@ -10,6 +18,15 @@ const PAGE_SIZE = 50;
 type Props = {
   isLoading: boolean;
   data: CampaignStat[];
+  // Đã tính sẵn ở page.tsx bằng computeCampaignWatchlist (cùng logic phục vụ /actions) - bảng
+  // này chỉ join theo eventName để hiện badge, không tính lại cap-risk/timeline.
+  watchlist: CampaignWatchlistRow[];
+};
+
+const HEALTH_META: Record<CampaignHealthStatus, { label: string; className: string }> = {
+  at_risk: { label: "Cần xử lý", className: "bg-red-50 text-red-700" },
+  watch: { label: "Theo dõi", className: "bg-amber-50 text-amber-700" },
+  stable: { label: "Ổn định", className: "bg-emerald-50 text-emerald-700" },
 };
 
 type SortKey =
@@ -42,10 +59,18 @@ function getSortValue(row: CampaignStat, key: SortKey): string | number {
   return row[key];
 }
 
-export default function CampaignTable({ isLoading, data }: Props) {
+export default function CampaignTable({ isLoading, data, watchlist }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("cpv");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc"); // CPV thấp = hiệu quả nhất lên đầu
   const [page, setPage] = useState(0);
+
+  const watchlistByEvent = useMemo(() => new Map(watchlist.map((w) => [w.eventName, w])), [watchlist]);
+  // Mốc "CPV cao bất thường" cho health badge - chỉ tính trên campaign có cash/views > 0, cùng
+  // điều kiện với insight rule "cpv-spread" (lib/api.ts) để 2 nơi không chấm khác nhau.
+  const bestCpv = useMemo(() => {
+    const eligible = data.filter((c) => c.totalCash > 0 && c.totalViews > 0).map((c) => c.cpv);
+    return eligible.length > 0 ? Math.min(...eligible) : 0;
+  }, [data]);
 
   const sorted = useMemo(() => {
     const copy = [...data];
@@ -83,6 +108,7 @@ export default function CampaignTable({ isLoading, data }: Props) {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="text-xs uppercase text-gray-400">
+              <th className="whitespace-nowrap pb-2 pr-3 font-medium">Tình trạng</th>
               {COLUMNS.map((col) => (
                 <th key={col.key} className="whitespace-nowrap pb-2 pr-3 font-medium">
                   <button
@@ -100,38 +126,46 @@ export default function CampaignTable({ isLoading, data }: Props) {
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={COLUMNS.length} className="py-2">
+                  <td colSpan={COLUMNS.length + 1} className="py-2">
                     <div className="h-8 animate-pulse rounded-md bg-emerald-50/60" />
                   </td>
                 </tr>
               ))}
 
             {!isLoading &&
-              paged.map((row) => (
-                <tr key={row.eventId} className="border-t border-gray-100">
-                  <td className="py-2 pr-3 font-medium text-gray-800">{row.eventName}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.videos)}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.totalViews)}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.uniqueCreators)}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatCurrency(row.totalCash)}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.totalPoint)}</td>
-                  <td className="whitespace-nowrap py-2 pr-3 font-semibold text-emerald-700">
-                    {formatCurrency(row.cpv)}
-                  </td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.viewsPerCreator)}</td>
-                  <td
-                    className={`whitespace-nowrap py-2 pr-3 ${
-                      row.rejectedPct > 20 ? "font-semibold text-red-600" : "text-gray-600"
-                    }`}
-                  >
-                    {formatPercent(row.rejectedPct)}
-                  </td>
-                </tr>
-              ))}
+              paged.map((row) => {
+                const health = HEALTH_META[computeCampaignHealth(row, watchlistByEvent, bestCpv)];
+                return (
+                  <tr key={row.eventId} className="border-t border-gray-100">
+                    <td className="whitespace-nowrap py-2 pr-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${health.className}`}>
+                        {health.label}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 font-medium text-gray-800">{row.eventName}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.videos)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.totalViews)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.uniqueCreators)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatCurrency(row.totalCash)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.totalPoint)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 font-semibold text-emerald-700">
+                      {formatCurrency(row.cpv)}
+                    </td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.viewsPerCreator)}</td>
+                    <td
+                      className={`whitespace-nowrap py-2 pr-3 ${
+                        row.rejectedPct > 20 ? "font-semibold text-red-600" : "text-gray-600"
+                      }`}
+                    >
+                      {formatPercent(row.rejectedPct)}
+                    </td>
+                  </tr>
+                );
+              })}
 
             {!isLoading && sorted.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={COLUMNS.length + 1} className="py-6 text-center text-sm text-gray-400">
                   Không có campaign nào trong khoảng thời gian đã chọn.
                 </td>
               </tr>

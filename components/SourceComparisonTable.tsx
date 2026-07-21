@@ -1,7 +1,7 @@
 "use client";
 
-import { SOURCE_META } from "@/components/DailyChart";
 import { formatNumber, formatPercent, type SourceComparison } from "@/lib/api";
+import { SOURCE_META } from "@/lib/sourceMeta";
 
 type Props = {
   isLoading: boolean;

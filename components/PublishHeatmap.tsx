@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SOURCE_META } from "@/components/DailyChart";
+import { SOURCE_META } from "@/lib/sourceMeta";
 import {
   WEEKDAY_LABELS,
   dominantHeatmapSource,
