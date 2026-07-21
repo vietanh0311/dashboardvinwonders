@@ -4,6 +4,7 @@
 // VC Creator Admin API thật (https://vcreator-admin-api.koc.com.vn).
 
 import {
+  type CampaignRule,
   CAMPAIGN_RULES,
   ENGAGEMENT_CHECK_MIN_VIEWS,
   THREADS_DISCUSSION_MIN_COMMENT_RATIO,
@@ -2004,6 +2005,15 @@ function isRejectedStatus(status: string): boolean {
   return /reject|denied|từ chối/i.test(status ?? "");
 }
 
+// "Được duyệt" = đã approved thật sự - KHÁC với "chưa bị từ chối" (isRejectedStatus ở trên).
+// Dữ liệu thực tế có 3 giá trị status: approved/rejected/waiting_approved - bài đang
+// waiting_approved (chờ duyệt, ~6-9% tổng số bài Threads) chưa "được duyệt" nên KHÔNG được tính
+// vào hợp lệ dù chưa bị từ chối (có thể vẫn bị từ chối sau). Dùng riêng cho logic tính thưởng
+// (computeCreatorPostRewards), không dùng để thay isRejectedStatus ở chỗ khác.
+function isApprovedStatus(status: string): boolean {
+  return /^approved$/i.test((status ?? "").trim());
+}
+
 export function computeCampaignStats(items: ContentItem[]): CampaignStat[] {
   type Accumulator = {
     name: string;
@@ -2289,7 +2299,8 @@ export type CampaignCapRisk = {
 };
 
 // Chỉ áp dụng cho campaign trả thưởng theo view (unit "view") có viewCapPerVideo - campaign
-// dạng "post" (Threads) trả theo bài, không có khái niệm cap/view nên bỏ qua.
+// dạng "post" (Threads) trả theo bài, dùng computeCreatorPostRewards() riêng (cap theo
+// postsCapPerCycle/creator/kỳ, không phải theo view/video).
 //
 // QUAN TRỌNG: cap này chỉ có ý nghĩa khi BTC đối soát/trả thưởng cho creator - không được dùng
 // để cắt/điều chỉnh views hay bất kỳ số liệu nào khác hiển thị trên dashboard (KPI, CPV,
@@ -2435,6 +2446,84 @@ export function computeCampaignWatchlist(items: ContentItem[], referenceDate: st
     .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
+// ---------------------------------------------------------------------------
+// Thưởng ước tính cho campaign trả theo bài (unit "post" - hiện là các campaign Threads, xem
+// CAMPAIGN_RULES trong lib/campaignRules.ts).
+// ---------------------------------------------------------------------------
+
+export type CreatorPostReward = {
+  eventName: string;
+  label: string;
+  creatorId: string;
+  creatorName: string;
+  totalPosts: number;
+  validPosts: number; // hợp lệ = status approved thật (xem isApprovedStatus) - không tính waiting_approved/rejected
+  paidPosts: number; // validPosts đã cap theo postsCapPerCycle/creator/kỳ (nếu thể lệ quy định)
+  payRate: number;
+  estimatedReward: number; // paidPosts * payRate
+  overCap: boolean; // validPosts vượt cap - phần vượt không được tính thưởng thêm
+};
+
+// Logic cơ bản theo thể lệ: mỗi bài hợp lệ ĐÃ được duyệt (status approved thật - xem
+// isApprovedStatus, KHÔNG tính bài đang waiting_approved) = payRate của thể lệ (vd 150.000đ/bài
+// cho Threads), cap theo postsCapPerCycle/creator/kỳ nếu thể lệ có quy định - phần vượt cap
+// không được tính thêm. Đây là số ƯỚC TÍNH bám theo thể lệ đã cấu hình trong CAMPAIGN_RULES,
+// KHÔNG thay thế statistic.cash.total thật do BTC đối soát trả (xem ghi chú đầu
+// lib/campaignRules.ts) - dùng để đối chiếu/tham khảo, không phải số liệu chính thức.
+export function computeCreatorPostRewards(items: ContentItem[]): CreatorPostReward[] {
+  type Group = {
+    rule: CampaignRule;
+    eventName: string;
+    creatorId: string;
+    creatorName: string;
+    items: ContentItem[];
+  };
+  const byGroup = new Map<string, Group>();
+
+  items.forEach((item) => {
+    const eventName = item.event?.name;
+    const creatorId = item.createdBy?._id;
+    if (!eventName || !creatorId) return;
+
+    const rule = matchCampaignRule(eventName);
+    if (!rule || rule.unit !== "post") return;
+
+    const key = `${eventName}::${creatorId}`;
+    const entry = byGroup.get(key) ?? {
+      rule,
+      eventName,
+      creatorId,
+      creatorName: item.createdBy?.name ?? "-",
+      items: [],
+    };
+    entry.items.push(item);
+    byGroup.set(key, entry);
+  });
+
+  const results: CreatorPostReward[] = [];
+  byGroup.forEach(({ rule, eventName, creatorId, creatorName, items: groupItems }) => {
+    const totalPosts = groupItems.length;
+    const validPosts = groupItems.filter((it) => isApprovedStatus(it.status)).length;
+    const cap = rule.postsCapPerCycle ?? Infinity;
+    const paidPosts = Math.min(validPosts, cap);
+
+    results.push({
+      eventName,
+      label: rule.label,
+      creatorId,
+      creatorName,
+      totalPosts,
+      validPosts,
+      paidPosts,
+      payRate: rule.payRate,
+      estimatedReward: paidPosts * rule.payRate,
+      overCap: validPosts > cap,
+    });
+  });
+
+  return results.sort((a, b) => b.estimatedReward - a.estimatedReward);
+}
+
 function formatDateVi(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
@@ -2504,6 +2593,32 @@ export function generateCampaignInsights(
         compliance.atRiskPct
       )}) không đạt chuẩn tương tác tối thiểu (>0.5% hoặc tỉ lệ comment/view theo thể lệ) - có nguy cơ bị BTC từ chối/không tính thưởng.`
     );
+  }
+
+  // 0d. Thưởng ước tính theo bài (Threads) - creator vượt cap bài hợp lệ/kỳ sẽ không được tính
+  // thưởng thêm cho phần vượt.
+  const postRewards = computeCreatorPostRewards(items);
+  if (postRewards.length > 0) {
+    const byLabel = new Map<string, { total: number; creators: number; overCap: number; payRate: number }>();
+    postRewards.forEach((r) => {
+      const entry = byLabel.get(r.label) ?? { total: 0, creators: 0, overCap: 0, payRate: r.payRate };
+      entry.total += r.estimatedReward;
+      entry.creators += 1;
+      if (r.overCap) entry.overCap += 1;
+      byLabel.set(r.label, entry);
+    });
+
+    byLabel.forEach((v, label) => {
+      const overCapNote =
+        v.overCap > 0
+          ? ` - ${formatNumber(v.overCap)} creator đã vượt cap bài hợp lệ/kỳ, phần vượt không được tính thêm`
+          : "";
+      insights.push(
+        `Thưởng ước tính campaign "${label}": ${formatCurrency(v.total)} cho ${formatNumber(
+          v.creators
+        )} creator (${formatCurrency(v.payRate)}/bài hợp lệ được duyệt)${overCapNote}.`
+      );
+    });
   }
 
   // 1. Chênh lệch CPV giữa 2 campaign xa nhau nhất.
