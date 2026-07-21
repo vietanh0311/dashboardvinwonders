@@ -2,7 +2,7 @@
 
 import { format, parseISO } from "date-fns";
 import type { ReactNode } from "react";
-import { SOURCE_META } from "@/components/DailyChart";
+import { SOURCE_META } from "@/lib/sourceMeta";
 import {
   CHANNEL_PLATFORM_LABEL,
   CREATOR_TIER_LABEL,

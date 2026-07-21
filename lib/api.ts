@@ -2435,6 +2435,37 @@ export function computeCampaignWatchlist(items: ContentItem[], referenceDate: st
     .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
+// ---------------------------------------------------------------------------
+// Health badge cho CampaignTable - gộp tín hiệu cap-risk/timeline (đã tính sẵn ở
+// computeCampaignWatchlist, đang phục vụ riêng /actions) với rejectedPct/CPV của chính campaign
+// đó thành 1 trạng thái duy nhất, để bảng campaign chính trả lời được "cần chú ý ngay" mà không
+// bắt người xem nhảy sang /actions.
+// ---------------------------------------------------------------------------
+
+export type CampaignHealthStatus = "at_risk" | "watch" | "stable";
+
+// watchlistByEvent: Map dựng 1 lần từ computeCampaignWatchlist() ở nơi gọi (vd useMemo trong
+// CampaignTable) - tránh find() tuyến tính lặp lại cho từng dòng khi bảng có nhiều campaign.
+// bestCpv: CPV thấp nhất trong các campaign có cash/views > 0 ở cùng kỳ đang xem - dùng làm mốc
+// so sánh "CPV cao bất thường", cùng ngưỡng 1.5x với insight rule "cpv-spread" bên dưới.
+export function computeCampaignHealth(
+  stat: CampaignStat,
+  watchlistByEvent: Map<string, CampaignWatchlistRow>,
+  bestCpv: number
+): CampaignHealthStatus {
+  const watch = watchlistByEvent.get(stat.eventName);
+  const endingSoon = !!watch && !watch.isEnded && watch.daysRemaining <= 7;
+  const overCap = !!watch && watch.videosOverCap > 0;
+
+  if (overCap || endingSoon || stat.rejectedPct > 20) return "at_risk";
+
+  const possiblyExtended = !!watch?.possiblyExtended;
+  const cpvOutlier = bestCpv > 0 && stat.cpv > bestCpv * 1.5;
+  if (possiblyExtended || cpvOutlier) return "watch";
+
+  return "stable";
+}
+
 function formatDateVi(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
@@ -2444,6 +2475,152 @@ function formatDateVi(dateStr: string): string {
 // Insight tự động (rule-based) cho trang /campaigns.
 // ---------------------------------------------------------------------------
 
+export type CampaignInsightContext = {
+  campaigns: CampaignStat[];
+  heatmap: HeatmapCell[];
+  viewDist: ViewDistribution;
+  tagAnalysis: TagAnalysis[];
+  capRisks: CampaignCapRisk[];
+  timelines: CampaignTimeline[];
+  compliance: EngagementCompliance;
+};
+
+export type CampaignInsightRule = {
+  id: string;
+  // Rule priority thấp hơn được ưu tiên giữ lại khi insights bị cắt còn 6 dòng (xem slice cuối
+  // generateCampaignInsights) - nhóm "cần hành động" (0-3: cap risk, timeline, engagement) phải
+  // luôn thắng nhóm thống kê chung (4-8) khi có quá 6 insight ứng với kỳ đang xem.
+  priority: number;
+  evaluate: (ctx: CampaignInsightContext) => string | null;
+};
+
+// Mỗi rule là 1 hàm pure độc lập - test được riêng từng rule bằng 1 context giả lập, không cần
+// dựng lại toàn bộ 6 tham số của generateCampaignInsights. Giữ nguyên 100% text/ngưỡng gốc.
+export const CAMPAIGN_INSIGHT_RULES: CampaignInsightRule[] = [
+  {
+    id: "cap-risk",
+    priority: 0,
+    // Video vượt cap đối soát/video theo thể lệ chương trình - phần vượt không được tính
+    // thưởng thêm, đáng để creator/BTC biết sớm thay vì tiếp tục đẩy view vô ích.
+    evaluate: ({ capRisks }) => {
+      const overCap = capRisks.filter((c) => c.videosOverCap > 0);
+      if (overCap.length === 0) return null;
+      const top = overCap[0];
+      return `${formatNumber(top.videosOverCap)} video trong campaign "${top.label}" đã vượt cap đối soát ${formatNumber(
+        top.viewCapPerVideo
+      )} views/video - ${formatNumber(top.viewsBeyondCap)} views vượt sẽ không được tính thưởng thêm.`;
+    },
+  },
+  {
+    id: "ending-soon",
+    priority: 1,
+    // Countdown campaign sắp kết thúc - giúp giải thích momentum giảm tự nhiên thay vì tưởng là
+    // bất thường.
+    evaluate: ({ timelines }) => {
+      const endingSoon = timelines.filter((t) => !t.isEnded).sort((a, b) => a.daysRemaining - b.daysRemaining)[0];
+      if (!endingSoon || endingSoon.daysRemaining > 7) return null;
+      return `Campaign "${endingSoon.label}" còn ${formatNumber(endingSoon.daysRemaining)} ngày nữa kết thúc (hết hạn ${formatDateVi(
+        endingSoon.endDate
+      )}) - nhắc creator đẩy nốt nội dung.`;
+    },
+  },
+  {
+    id: "recently-ended",
+    priority: 2,
+    // Countdown campaign vừa kết thúc - cùng lý do với ending-soon (giải thích momentum giảm).
+    evaluate: ({ timelines }) => {
+      const recentlyEnded = timelines.filter((t) => t.isEnded).sort((a, b) => b.daysRemaining - a.daysRemaining)[0];
+      if (!recentlyEnded || recentlyEnded.daysRemaining < -14) return null;
+
+      if (recentlyEnded.possiblyExtended) {
+        // Vẫn có video published sau endDate cấu hình - thể lệ nhiều khả năng đã được BTC gia
+        // hạn/sửa đổi, không nên khẳng định chắc "đã kết thúc" (xem ghi chú ở CampaignTimeline).
+        return `Campaign "${recentlyEnded.label}" đã qua ngày kết thúc theo cấu hình (${formatDateVi(
+          recentlyEnded.endDate
+        )}) nhưng vẫn có video mới - có thể chương trình đã gia hạn, cần đối chiếu lại thể lệ mới nhất và cập nhật lib/campaignRules.ts.`;
+      }
+      return `Campaign "${recentlyEnded.label}" đã kết thúc ${formatNumber(
+        Math.abs(recentlyEnded.daysRemaining)
+      )} ngày trước (${formatDateVi(recentlyEnded.endDate)}) - views/video đứng yên là bình thường, không phải dấu hiệu bất thường.`;
+    },
+  },
+  {
+    id: "engagement-compliance",
+    priority: 3,
+    // Video không đạt chuẩn tương tác/comment tối thiểu theo thể lệ - nguy cơ bị từ chối.
+    evaluate: ({ compliance }) => {
+      if (compliance.atRiskCount < 3 || compliance.atRiskPct < 10) return null;
+      return `${formatNumber(compliance.atRiskCount)} video (${formatPercent(
+        compliance.atRiskPct
+      )}) không đạt chuẩn tương tác tối thiểu (>0.5% hoặc tỉ lệ comment/view theo thể lệ) - có nguy cơ bị BTC từ chối/không tính thưởng.`;
+    },
+  },
+  {
+    id: "cpv-spread",
+    priority: 4,
+    // Chênh lệch CPV giữa 2 campaign xa nhau nhất.
+    evaluate: ({ campaigns }) => {
+      const withCash = campaigns.filter((c) => c.totalCash > 0 && c.totalViews > 0);
+      if (withCash.length < 2) return null;
+      const sorted = [...withCash].sort((a, b) => b.cpv - a.cpv);
+      const worst = sorted[0];
+      const best = sorted[sorted.length - 1];
+      if (best.cpv <= 0 || worst.cpv <= best.cpv * 1.5) return null;
+      const ratio = worst.cpv / best.cpv;
+      return `CPV campaign "${worst.eventName}" = ${formatCurrency(worst.cpv)}, gấp ${ratio.toFixed(
+        1
+      )} lần campaign "${best.eventName}" (${formatCurrency(best.cpv)}) - xem lại cơ cấu thưởng.`;
+    },
+  },
+  {
+    id: "best-heatmap-slot",
+    priority: 5,
+    // Khung giờ đăng tốt nhất (đủ mẫu, xem HEATMAP_MIN_SAMPLE) so với avg views toàn hệ (= mean).
+    evaluate: ({ heatmap, viewDist }) => {
+      const best = pickBestHeatmapCell(heatmap);
+      if (!best || viewDist.mean <= 0) return null;
+      const ratio = best.avgViews / viewDist.mean;
+      if (ratio < 1.5) return null;
+      const dominant = dominantHeatmapSource(best);
+      const dominantNote = dominant ? ` (chủ yếu ${SOURCE_LABEL[dominant] ?? dominant})` : "";
+      return `Khung giờ ${best.hour}h ${WEEKDAY_LABELS[best.dayOfWeek]}${dominantNote} cho avg views cao gấp ${ratio.toFixed(
+        1
+      )} lần trung bình - hướng dẫn creators đăng vào giờ này.`;
+    },
+  },
+  {
+    id: "flop-pct",
+    priority: 6,
+    // % video flop.
+    evaluate: ({ viewDist }) => {
+      if (viewDist.flopPct <= 0) return null;
+      return `${formatPercent(viewDist.flopPct)} video dưới 200 views (flop) - cần training content cho nhóm creators tier thấp.`;
+    },
+  },
+  {
+    id: "tag-anomaly",
+    priority: 7,
+    // Tag tăng đột biến tuần này.
+    evaluate: ({ tagAnalysis }) => {
+      const anomalousTags = tagAnalysis.filter((t) => t.isAnomalous);
+      if (anomalousTags.length === 0) return null;
+      const names = anomalousTags.map((t) => `"${t.name}"`).join(", ");
+      return `Tag ${names} tăng đột biến số video gắn tuần này - cần kiểm tra nguyên nhân.`;
+    },
+  },
+  {
+    id: "view-skew",
+    priority: 8,
+    // Phân phối views lệch nhiều (mean >> median) - phụ thuộc video viral.
+    evaluate: ({ viewDist }) => {
+      if (viewDist.median <= 0 || viewDist.mean <= viewDist.median * 2) return null;
+      return `Views trung bình (${formatNumber(viewDist.mean)}) cao hơn nhiều so với trung vị (${formatNumber(
+        viewDist.median
+      )}) - kết quả đang phụ thuộc vào một số video viral.`;
+    },
+  },
+];
+
 export function generateCampaignInsights(
   campaigns: CampaignStat[],
   heatmap: HeatmapCell[],
@@ -2452,115 +2629,23 @@ export function generateCampaignInsights(
   items: ContentItem[],
   referenceDate: string
 ): string[] {
-  const insights: string[] = [];
+  // Mỗi hàm compute chỉ chạy đúng 1 lần dù có nhiều rule cùng cần dữ liệu của nó (vd cả
+  // ending-soon lẫn recently-ended đều đọc chung `timelines`).
+  const ctx: CampaignInsightContext = {
+    campaigns,
+    heatmap,
+    viewDist,
+    tagAnalysis,
+    capRisks: computeCampaignCapRisks(items),
+    timelines: computeCampaignTimelines(items, referenceDate),
+    compliance: computeEngagementCompliance(items),
+  };
 
-  // 0a. Video vượt cap đối soát/video theo thể lệ chương trình - phần vượt không được tính
-  // thưởng thêm, đáng để creator/BTC biết sớm thay vì tiếp tục đẩy view vô ích.
-  const capRisks = computeCampaignCapRisks(items).filter((c) => c.videosOverCap > 0);
-  if (capRisks.length > 0) {
-    const top = capRisks[0];
-    insights.push(
-      `${formatNumber(top.videosOverCap)} video trong campaign "${top.label}" đã vượt cap đối soát ${formatNumber(
-        top.viewCapPerVideo
-      )} views/video - ${formatNumber(top.viewsBeyondCap)} views vượt sẽ không được tính thưởng thêm.`
-    );
-  }
-
-  // 0b. Countdown campaign sắp/đã kết thúc - giúp giải thích momentum giảm tự nhiên thay vì
-  // tưởng là bất thường.
-  const timelines = computeCampaignTimelines(items, referenceDate);
-  const endingSoon = timelines.filter((t) => !t.isEnded).sort((a, b) => a.daysRemaining - b.daysRemaining)[0];
-  if (endingSoon && endingSoon.daysRemaining <= 7) {
-    insights.push(
-      `Campaign "${endingSoon.label}" còn ${formatNumber(endingSoon.daysRemaining)} ngày nữa kết thúc (hết hạn ${formatDateVi(
-        endingSoon.endDate
-      )}) - nhắc creator đẩy nốt nội dung.`
-    );
-  }
-  const recentlyEnded = timelines.filter((t) => t.isEnded).sort((a, b) => b.daysRemaining - a.daysRemaining)[0];
-  if (recentlyEnded && recentlyEnded.daysRemaining >= -14) {
-    if (recentlyEnded.possiblyExtended) {
-      // Vẫn có video published sau endDate cấu hình - thể lệ nhiều khả năng đã được BTC gia hạn/
-      // sửa đổi, không nên khẳng định chắc "đã kết thúc" (xem ghi chú ở CampaignTimeline).
-      insights.push(
-        `Campaign "${recentlyEnded.label}" đã qua ngày kết thúc theo cấu hình (${formatDateVi(
-          recentlyEnded.endDate
-        )}) nhưng vẫn có video mới - có thể chương trình đã gia hạn, cần đối chiếu lại thể lệ mới nhất và cập nhật lib/campaignRules.ts.`
-      );
-    } else {
-      insights.push(
-        `Campaign "${recentlyEnded.label}" đã kết thúc ${formatNumber(
-          Math.abs(recentlyEnded.daysRemaining)
-        )} ngày trước (${formatDateVi(recentlyEnded.endDate)}) - views/video đứng yên là bình thường, không phải dấu hiệu bất thường.`
-      );
-    }
-  }
-
-  // 0c. Video không đạt chuẩn tương tác/comment tối thiểu theo thể lệ - nguy cơ bị từ chối.
-  const compliance = computeEngagementCompliance(items);
-  if (compliance.atRiskCount >= 3 && compliance.atRiskPct >= 10) {
-    insights.push(
-      `${formatNumber(compliance.atRiskCount)} video (${formatPercent(
-        compliance.atRiskPct
-      )}) không đạt chuẩn tương tác tối thiểu (>0.5% hoặc tỉ lệ comment/view theo thể lệ) - có nguy cơ bị BTC từ chối/không tính thưởng.`
-    );
-  }
-
-  // 1. Chênh lệch CPV giữa 2 campaign xa nhau nhất.
-  const withCash = campaigns.filter((c) => c.totalCash > 0 && c.totalViews > 0);
-  if (withCash.length >= 2) {
-    const sorted = [...withCash].sort((a, b) => b.cpv - a.cpv);
-    const worst = sorted[0];
-    const best = sorted[sorted.length - 1];
-    if (best.cpv > 0 && worst.cpv > best.cpv * 1.5) {
-      const ratio = worst.cpv / best.cpv;
-      insights.push(
-        `CPV campaign "${worst.eventName}" = ${formatCurrency(worst.cpv)}, gấp ${ratio.toFixed(
-          1
-        )} lần campaign "${best.eventName}" (${formatCurrency(best.cpv)}) - xem lại cơ cấu thưởng.`
-      );
-    }
-  }
-
-  // 2. Khung giờ đăng tốt nhất (đủ mẫu, xem HEATMAP_MIN_SAMPLE) so với avg views toàn hệ (= mean).
-  const best = pickBestHeatmapCell(heatmap);
-  if (best && viewDist.mean > 0) {
-    const ratio = best.avgViews / viewDist.mean;
-    if (ratio >= 1.5) {
-      const dominant = dominantHeatmapSource(best);
-      const dominantNote = dominant ? ` (chủ yếu ${SOURCE_LABEL[dominant] ?? dominant})` : "";
-      insights.push(
-        `Khung giờ ${best.hour}h ${WEEKDAY_LABELS[best.dayOfWeek]}${dominantNote} cho avg views cao gấp ${ratio.toFixed(
-          1
-        )} lần trung bình - hướng dẫn creators đăng vào giờ này.`
-      );
-    }
-  }
-
-  // 3. % video flop.
-  if (viewDist.flopPct > 0) {
-    insights.push(
-      `${formatPercent(viewDist.flopPct)} video dưới 200 views (flop) - cần training content cho nhóm creators tier thấp.`
-    );
-  }
-
-  // 4. Tag tăng đột biến tuần này.
-  const anomalousTags = tagAnalysis.filter((t) => t.isAnomalous);
-  if (anomalousTags.length > 0) {
-    const names = anomalousTags.map((t) => `"${t.name}"`).join(", ");
-    insights.push(`Tag ${names} tăng đột biến số video gắn tuần này - cần kiểm tra nguyên nhân.`);
-  }
-
-  // 5. Phân phối views lệch nhiều (mean >> median) - phụ thuộc video viral.
-  if (viewDist.median > 0 && viewDist.mean > viewDist.median * 2) {
-    insights.push(
-      `Views trung bình (${formatNumber(viewDist.mean)}) cao hơn nhiều so với trung vị (${formatNumber(
-        viewDist.median
-      )}) - kết quả đang phụ thuộc vào một số video viral.`
-    );
-  }
-
-  return insights.slice(0, 6);
+  return CAMPAIGN_INSIGHT_RULES.slice()
+    .sort((a, b) => a.priority - b.priority)
+    .map((rule) => rule.evaluate(ctx))
+    .filter((text): text is string => text !== null)
+    .slice(0, 6);
 }
 
 // ---------------------------------------------------------------------------

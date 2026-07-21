@@ -70,15 +70,26 @@ const COPY_HEADERS = [
   "CPV",
 ];
 
+type Props = {
+  // eventId đang được lọc ở filter chính của trang (nếu có) - dùng làm giá trị mặc định ban đầu
+  // và mỗi khi đổi, để không bắt người dùng chọn lại đúng campaign đã lọc ở trên. Vẫn tự chọn lại
+  // được bằng dropdown riêng của bảng này sau đó (không khoá cứng 2 chiều).
+  syncedEventId?: string;
+};
+
 // Bảng top creator riêng cho 1 campaign - tự chọn campaign + khoảng ngày độc
 // lập với filter chung của trang (giống cách CreatorSearch tự fetch riêng),
 // nên đặt được ở bất kỳ trang nào mà không phụ thuộc state của trang đó.
-export default function CampaignTopCreatorsTable() {
+export default function CampaignTopCreatorsTable({ syncedEventId }: Props) {
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [eventId, setEventId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("totalViews");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    if (syncedEventId) setEventId(syncedEventId);
+  }, [syncedEventId]);
 
   const eventsList = useSWR("vc-events-list", () => fetchEventsSmart(false, EVENTS_LOOKBACK_DAYS));
   const events = eventsList.data ?? [];
@@ -86,7 +97,12 @@ export default function CampaignTopCreatorsTable() {
 
   const content = useSWR(
     eventId ? ["vc-contents-campaign-top-creators", range.from, range.to, eventId] : null,
-    () => fetchContentsSmart(range.from, range.to, false, { event: eventId })
+    () => fetchContentsSmart(range.from, range.to, false, { event: eventId }),
+    // Đổi campaign = đổi hẳn thực thể đang xem, không nên giữ bảng xếp hạng của campaign cũ
+    // trong lúc chờ (khác case đổi range ở trang chính, nơi số liệu chỉ nhích dần nên giữ lại
+    // laggy data hợp lý). Tắt keepPreviousData riêng cho hook này để `isLoading` bên dưới phản
+    // ánh đúng "đang tải campaign mới" thay vì bị che bởi dữ liệu cũ (xem thêm ghi chú review).
+    { keepPreviousData: false }
   );
 
   const isLoading = !!eventId && !content.data;

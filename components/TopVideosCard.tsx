@@ -2,7 +2,7 @@
 
 import { format, parseISO } from "date-fns";
 import { formatNumber, type ContentItem } from "@/lib/api";
-import { SOURCE_META } from "@/components/DailyChart";
+import { SOURCE_META } from "@/lib/sourceMeta";
 
 type Props = {
   items: ContentItem[];

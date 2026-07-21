@@ -9,7 +9,8 @@
     "lint": "next lint",
     "sync": "tsx --env-file=.env.local scripts/sync.ts",
     "sync-users": "tsx --env-file=.env.local scripts/sync-all-users.ts",
-    "verify-login": "tsx --env-file=.env.local scripts/verify-vc-login.ts"
+    "verify-login": "tsx --env-file=.env.local scripts/verify-vc-login.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -30,7 +31,8 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "tsx": "^4.23.1",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
   },
   "allowScripts": {
     "fsevents@2.3.3": true,
