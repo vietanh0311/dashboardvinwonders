@@ -6,18 +6,18 @@
 -- (content_id, snapshot_date). Ngưỡng dưới đây là NGƯỠNG KHỞI ĐIỂM theo kế hoạch
 -- tái cấu trúc phễu - cần tinh chỉnh lại sau khi chạy thử trên dữ liệu thật ~2 tuần:
 --
---   1. velocity_spike (+30)     - (delta_views hôm đó - median cùng nguồn/tuổi video)
---                                 / MAD >= 3.5 VÀ delta_views >= 5.000. Median/MAD tính
---                                 riêng theo (source, age_bucket) để video mới đăng tăng
---                                 mạnh (bình thường) không bị lẫn với video cũ tự nhiên
---                                 gần như đứng yên.
+--   1. velocity_spike (+30)     - (delta_views hôm đó - mean cùng nguồn/tuổi video)
+--                                 / stddev >= 3.5 VÀ delta_views >= 5.000. Mean/stddev
+--                                 tính riêng theo (source, age_bucket) để video mới đăng
+--                                 tăng mạnh (bình thường) không bị lẫn với video cũ tự
+--                                 nhiên gần như đứng yên.
 --   2. late_spike (+30)         - video >= 10 ngày tuổi, tuần trước gần như đứng yên
 --                                 (views tăng <= 10% trong 7 ngày trước đó), rồi 1 ngày
 --                                 bỗng chiếm >= 50% tổng views luỹ kế - mẫu hình mua view
 --                                 cho video cũ để kịp KPI campaign.
 --   3. engagement_mismatch (+20) - CHỈ xét khi đã có (1) hoặc (2): tỉ lệ (like+comment)/view
 --                                 của riêng phần tăng thêm thấp hơn 30% so với tỉ lệ
---                                 tương tác trung vị của chính creator đó (hoặc theo
+--                                 tương tác trung bình của chính creator đó (hoặc theo
 --                                 nguồn nếu creator chưa đủ mẫu) - view mua thường không
 --                                 kèm like/comment tương ứng.
 --   4. negative_views (+40)     - delta_views âm đáng kể (<= -5% views trước đó) - nền
@@ -35,13 +35,30 @@
 --     from_date truyền vào nên <= 14 ngày trước hiện tại.
 --   - Đây là công cụ CHỈ HIỂN THỊ/CẢNH BÁO, không tự động kết luận buff/cheat - vẫn cần
 --     người xem lại trước khi hành động (xem cột "reasons" để biết chỉ số nào đã kích hoạt).
+--
+-- LƯU Ý HIỆU NĂNG - ĐÃ ĐO THẬT: bản đầu tiên (percentile_cont/MAD theo nhóm, CTE không
+-- đánh dấu materialized) mất 25-40s/lần gọi trên instance hiện tại (work_mem chỉ ~2.1MB
+-- nên percentile_cont theo creator_id trên hàng trăm nghìn dòng luôn tràn ra đĩa; CTE
+-- được tham chiếu nhiều lần bị Postgres tính lại từ đầu mỗi lần vì không materialized) -
+-- vượt xa statement_timeout 8s của PostgREST, y hệt lỗi từng gặp ở /trends. Bản dưới đây:
+--   - Đánh dấu MATERIALIZED các CTE trung gian dùng lại nhiều lần (raw/scoped/joined/
+--     flagged/flagged2/result...) - tránh tính lại cả pipeline mỗi lần CTE được tham chiếu.
+--   - Đổi baseline từ percentile_cont(0.5)/MAD sang avg/stddev_pop - cùng ý nghĩa thống kê
+--     (lệch bao nhiêu độ lệch chuẩn so với "bình thường"), 1 trong 2 cách hợp lệ theo yêu
+--     cầu ban đầu, nhưng tính được trong 1 lượt HashAggregate thay vì phải sort riêng từng
+--     nhóm (creator_id có thể lên tới hàng nghìn nhóm).
+-- Dù vậy, TOÀN BỘ pipeline vẫn quét ~250k+ dòng (không có filter nào loại được phần lớn
+-- dữ liệu - đúng bản chất bài toán "so mọi video với baseline"), nên KHÔNG gọi hàm này
+-- real-time mỗi lần load trang: xem anomaly_cache + refresh_anomaly_cache() ở cuối file -
+-- trang /trends chỉ đọc lại kết quả đã cache, refresh_anomaly_cache() chạy 1 lần/ngày ngay
+-- sau sync qua kết nối Postgres trực tiếp (không qua PostgREST, không bị giới hạn 8s).
 
 create or replace function videos_anomaly_json(from_date date)
 returns jsonb
 language sql
 stable
 as $$
-  with raw as (
+  with raw as materialized (
     select
       content_id, snapshot_date, title, link, source, creator_id, creator_name,
       event_name, published_at, views, likes, comments,
@@ -57,7 +74,7 @@ as $$
     where snapshot_date >= from_date - 14
     window w as (partition by content_id order by snapshot_date)
   ),
-  scoped as (
+  scoped as materialized (
     select *,
       case
         when video_age_days <= 1 then '0-1'
@@ -71,56 +88,44 @@ as $$
   ),
   -- Baseline velocity theo (nguồn, tuổi video) - chỉ dùng cặp snapshot cách nhau ~1 ngày
   -- (18-30h) để không lẫn các cặp bị giãn do sync bỏ ngày (được co lại 1 snapshot/tuần).
-  baseline_median as (
+  baseline_stats as materialized (
     select source, age_bucket,
-           percentile_cont(0.5) within group (order by delta_views) as median_delta
+           avg(delta_views) as mean_delta,
+           stddev_pop(delta_views) as stddev_delta
     from scoped
     where delta_views is not null and delta_hours between 18 and 30
     group by source, age_bucket
   ),
-  baseline_mad as (
-    select s.source, s.age_bucket,
-           percentile_cont(0.5) within group (order by abs(s.delta_views - bm.median_delta)) as mad
-    from scoped s
-    join baseline_median bm using (source, age_bucket)
-    where s.delta_views is not null and s.delta_hours between 18 and 30
-    group by s.source, s.age_bucket
-  ),
   -- Baseline tỉ lệ tương tác (like+comment)/view của phần TĂNG THÊM mỗi ngày - ưu tiên
   -- theo creator (đủ >= 3 mẫu), fallback theo nguồn nếu creator quá ít video.
-  creator_engagement as (
+  creator_engagement as materialized (
     select creator_id,
-           percentile_cont(0.5) within group (
-             order by (coalesce(delta_likes,0)+coalesce(delta_comments,0))::float / nullif(delta_views,0)
-           ) as median_rate,
+           avg((coalesce(delta_likes,0)+coalesce(delta_comments,0))::float / nullif(delta_views,0)) as mean_rate,
            count(*) as sample_count
     from scoped
     where delta_views is not null and delta_views > 0
     group by creator_id
   ),
-  source_engagement as (
+  source_engagement as materialized (
     select source,
-           percentile_cont(0.5) within group (
-             order by (coalesce(delta_likes,0)+coalesce(delta_comments,0))::float / nullif(delta_views,0)
-           ) as median_rate
+           avg((coalesce(delta_likes,0)+coalesce(delta_comments,0))::float / nullif(delta_views,0)) as mean_rate
     from scoped
     where delta_views is not null and delta_views > 0
     group by source
   ),
-  joined as (
+  joined as materialized (
     select
       s.*,
-      bm.median_delta,
-      mad.mad,
-      case when mad.mad > 0 then (s.delta_views - bm.median_delta) / (mad.mad * 1.4826) else null end as velocity_z,
-      case when ce.sample_count >= 3 then ce.median_rate else se.median_rate end as baseline_engagement_rate
+      bs.mean_delta,
+      bs.stddev_delta,
+      case when bs.stddev_delta > 0 then (s.delta_views - bs.mean_delta) / bs.stddev_delta else null end as velocity_z,
+      case when ce.sample_count >= 3 then ce.mean_rate else se.mean_rate end as baseline_engagement_rate
     from scoped s
-    left join baseline_median bm on bm.source = s.source and bm.age_bucket = s.age_bucket
-    left join baseline_mad mad on mad.source = s.source and mad.age_bucket = s.age_bucket
+    left join baseline_stats bs on bs.source = s.source and bs.age_bucket = s.age_bucket
     left join creator_engagement ce on ce.creator_id = s.creator_id
     left join source_engagement se on se.source = s.source
   ),
-  flagged as (
+  flagged as materialized (
     select j.*,
       (j.velocity_z is not null and j.velocity_z >= 3.5 and j.delta_views >= 5000) as velocity_flag,
       (
@@ -136,7 +141,7 @@ as $$
       ) as negative_flag
     from joined j
   ),
-  flagged2 as (
+  flagged2 as materialized (
     select f.*,
       (
         (f.velocity_flag or f.late_spike_flag)
@@ -147,19 +152,19 @@ as $$
       ) as engagement_mismatch_flag
     from flagged f
   ),
-  creator_cluster as (
+  creator_cluster as materialized (
     select creator_id, snapshot_date, count(*) as flagged_count
     from flagged2
     where velocity_flag or late_spike_flag or negative_flag
     group by creator_id, snapshot_date
     having count(*) >= 3
   ),
-  final as (
+  final as materialized (
     select f.*, coalesce(cc.flagged_count, 0) >= 3 as cluster_flag
     from flagged2 f
     left join creator_cluster cc on cc.creator_id = f.creator_id and cc.snapshot_date = f.snapshot_date
   ),
-  result as (
+  result as materialized (
     select *,
       least(100,
         (case when velocity_flag then 30 else 0 end) +
@@ -216,4 +221,34 @@ as $$
       ) per_creator
     )
   );
+$$;
+
+-- Cache kết quả videos_anomaly_json - singleton 1 dòng, ghi bởi refresh_anomaly_cache()
+-- ngay sau mỗi lần sync (scripts/sync.ts, qua kết nối Postgres trực tiếp SUPABASE_DB_URL -
+-- KHÔNG qua PostgREST vì role đăng nhập `authenticator` bị khoá statement_timeout=8s ở cấp
+-- kết nối, không đủ cho query gốc dù đã tối ưu). computeAnomalies() (lib/supabaseData.ts)
+-- chỉ SELECT lại dòng này - luôn nhanh (~vài chục ms) bất kể query gốc nặng cỡ nào.
+create table if not exists anomaly_cache (
+  id smallint primary key default 1 check (id = 1),
+  computed_at timestamptz not null,
+  window_days int not null,
+  data jsonb not null
+);
+
+create or replace function refresh_anomaly_cache(p_window_days int default 14)
+returns void
+language plpgsql
+as $$
+declare
+  v_from_date date := (now() at time zone 'Asia/Ho_Chi_Minh')::date - (p_window_days - 1);
+  v_data jsonb;
+begin
+  v_data := videos_anomaly_json(v_from_date);
+  insert into anomaly_cache (id, computed_at, window_days, data)
+  values (1, now(), p_window_days, v_data)
+  on conflict (id) do update set
+    computed_at = excluded.computed_at,
+    window_days = excluded.window_days,
+    data = excluded.data;
+end;
 $$;

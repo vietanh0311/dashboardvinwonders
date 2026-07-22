@@ -186,6 +186,37 @@ as $$
   from videos_creator_ids_in_range(from_at, to_at, p_source, p_event_name, p_tag_name, p_workplace_unit);
 $$;
 
+-- Danh sách event/campaign DUY NHẤT trong khoảng ngày - dùng cho dropdown chọn
+-- campaign ở CampaignLifecycleChart + CampaignTopCreatorsTable (/campaigns).
+-- SELECT DISTINCT ON chạy thẳng trong DB (đi index bên dưới) thay cho cách cũ
+-- kéo mọi dòng video có event_id trong cửa sổ (hàng chục nghìn dòng ở cửa sổ
+-- 90 ngày, PostgREST qua supabase-js không hỗ trợ SELECT DISTINCT) về Node rồi
+-- dedupe ở JS - hay dính statement timeout khi bảng videos tích nhiều dòng.
+--
+-- LƯU Ý: index này từng thiếu "include (event_name)" - khiến Postgres vẫn phải
+-- fetch heap cho ~35k dòng is_latest+event_id (chỉ có event_id/published_at
+-- trong index, thiếu event_name) - đo được ~5s, sát ngưỡng timeout 8s của
+-- Supabase. Thêm event_name vào include để thành Index Only Scan thật, đo lại
+-- còn ~0.25s. Đây chính là nguyên nhân dropdown "Chọn campaign" ở /campaigns
+-- (Lifecycle chart + Top creator theo campaign) không chọn được gì - hàm dưới
+-- CHƯA TỪNG được deploy lên Supabase thật (chỉ có trong file này, chưa chạy).
+create index if not exists videos_event_id_published_idx
+  on videos (event_id, published_at) include (event_name) where is_latest and event_id is not null;
+
+create or replace function videos_distinct_events_json(from_at timestamptz)
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('_id', event_id, 'name', name) order by name), '[]'::jsonb)
+  from (
+    select distinct on (event_id) event_id, coalesce(event_name, event_id) as name
+    from videos
+    where is_latest and event_id is not null and published_at >= from_at
+    order by event_id, published_at desc
+  ) d;
+$$;
+
 -- Retention cho lịch sử snapshot: bảng videos chèn ~1 dòng/video/lần sync (cửa
 -- sổ 90 ngày ~ 36k dòng/lần) nên sẽ phình ~1M dòng/tháng nếu sync hằng ngày.
 -- Giữ snapshot theo NGÀY trong keep_daily_days gần nhất (đủ cho velocity/so
@@ -227,12 +258,18 @@ as $$
   select count(*) from deleted;
 $$;
 
+-- Covering index cho CTE `daily` trong videos_trends_json bên dưới (tổng
+-- views/videos theo snapshot_date) - tránh fetch heap cho ~35k dòng/ngày chỉ để
+-- đọc thêm cột views. Đo được: seq scan không index ~7.2s -> index-only scan
+-- với index này ~3s (cold).
+create index if not exists videos_snapshot_date_views_idx on videos (snapshot_date) include (views);
+
 -- Toàn bộ tính toán của /trends chạy trong DB, trả jsonb đã tổng hợp (vài
 -- trăm dòng) thay vì app kéo mọi dòng có snapshot trong cửa sổ (74k+ dòng,
 -- tăng dần theo lần sync) về Node. Gồm 3 phần, giữ nguyên logic của
 -- computeTrends cũ (lib/supabaseData.ts):
---   velocity    - delta views giữa 2 snapshot gần nhất của mỗi content_id
---                 (lead() theo snapshot_date desc), chỉ lấy delta > 0, top 20.
+--   velocity    - delta views giữa 2 snapshot gần nhất của mỗi content_id, chỉ
+--                 lấy delta > 0, top 20.
 --   thisWeek/lastWeek - metrics theo published_at trên dòng is_latest=true (đi
 --                 partial index videos_is_latest_published_idx). Neo "tuần này"
 --                 vào snapshot_date mới nhất thực tế (không phải hôm nay) vì
@@ -240,31 +277,48 @@ $$;
 --                 sẽ làm "tuần này" thấp hơn "tuần trước" một cách giả tạo.
 --                 Ranh giới ngày quy đổi theo múi giờ VN như vnDayStartToUtcIso.
 --   dailyTotals - tổng views + số dòng theo từng snapshot_date trong cửa sổ.
+--
+-- LƯU Ý HIỆU NĂNG (bug timeout "canceling statement due to statement timeout"
+-- ở Signals - View velocity): bản velocity CŨ dùng window function LEAD quét
+-- TOÀN BỘ ~252k dòng snapshot 14 ngày (~100% bảng videos ở quy mô hiện tại) chỉ
+-- để lấy top-20 - đo được 15.6s. Bản dưới đây join trực tiếp ĐÚNG 2 mốc
+-- snapshot_date gần nhất (không cần window qua cả cửa sổ 14 ngày), và thu hẹp
+-- cột trước khi join+sort (chỉ content_id/views), chỉ lấy lại title/link/...
+-- CHO 20 DÒNG THẮNG sau cùng - đo được 0.39s (từ 15.6s). `daily` CTE bên dưới
+-- vẫn cần quét ~100% dòng trong cửa sổ (không tránh được, đúng bản chất "tổng
+-- views/ngày") - dùng covering index videos_snapshot_date_views_idx để tránh
+-- fetch heap, còn ~3s cold (từ 7.2s).
 create or replace function videos_trends_json(from_date date)
 returns jsonb
 language sql
 stable
 as $$
-  with win as (
-    select content_id, snapshot_date, title, link, source, creator_name, views,
-           row_number() over w as rn,
-           lead(views) over w as prev_views,
-           lead(snapshot_date) over w as prev_date
-    from videos
-    where snapshot_date >= from_date
-    window w as (partition by content_id order by snapshot_date desc)
+  with dates as materialized (
+    select array_agg(d order by d desc) as ds
+    from (select distinct snapshot_date as d from videos where snapshot_date >= from_date order by d desc limit 2) x
   ),
-  velocity as (
-    select content_id, title, link, source, creator_name,
-           views, prev_views, prev_date, snapshot_date,
-           views - prev_views as delta_views,
-           greatest(1, (snapshot_date - prev_date) * 24) as delta_hours
-    from win
-    where rn = 1
-      and prev_views is not null
-      and views - prev_views > 0
+  deltas as materialized (
+    select l.content_id, l.views, p.views as prev_views, dates.ds[1] as snapshot_date, dates.ds[2] as prev_date
+    from videos l
+    join videos p on p.content_id = l.content_id and p.snapshot_date = (select ds[2] from dates)
+    cross join dates
+    where l.snapshot_date = dates.ds[1]
+  ),
+  top_velocity as materialized (
+    select *, views - prev_views as delta_views
+    from deltas
+    where prev_views is not null and views - prev_views > 0
     order by views - prev_views desc
     limit 20
+  ),
+  velocity as (
+    -- Join lại lấy cột hiển thị CHỈ cho 20 dòng đã thắng - point lookup rẻ qua
+    -- videos_snapshot_content_idx (snapshot_date, content_id) hiện có.
+    select t.content_id, v.title, v.link, v.source, v.creator_name,
+           t.views, t.prev_views, t.prev_date, t.snapshot_date, t.delta_views,
+           greatest(1, (t.snapshot_date - t.prev_date) * 24) as delta_hours
+    from top_velocity t
+    join videos v on v.content_id = t.content_id and v.snapshot_date = t.snapshot_date
   ),
   anchor as (
     select coalesce(max(snapshot_date), from_date) as d
