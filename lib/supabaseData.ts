@@ -382,31 +382,25 @@ export async function fetchAllCreatorRows(): Promise<CreatorRow[]> {
 
 export type EventOption = { _id: string; name: string };
 
-// Danh sách event cho dropdown (vd Campaign Lifecycle) - chỉ select 2 cột
-// event_id/event_name (nhẹ hơn nhiều so với select("*")) rồi dedupe ở JS, vì
-// PostgREST không hỗ trợ SELECT DISTINCT qua supabase-js. Thay cho việc gọi
-// thẳng /events của VC API thật (bị chặn 403 khi chạy trên Vercel).
+// Danh sách event cho dropdown (Campaign Lifecycle, Top creator theo
+// campaign) - SELECT DISTINCT chạy thẳng trong SQL function
+// (videos_distinct_events_json, xem supabase-schema.sql) thay vì kéo mọi dòng
+// video có event_id trong cửa sổ (hàng chục nghìn dòng, PostgREST qua
+// supabase-js không hỗ trợ SELECT DISTINCT) về Node rồi dedupe ở JS - cách cũ
+// hay dính statement timeout ở cửa sổ 90 ngày (xem fetchAllRows/fetchAllCreatorRows
+// cho pattern phân trang vẫn còn dùng ở nơi khác).
 export async function fetchDistinctEvents(sinceDate: string): Promise<EventOption[]> {
   const supabase = getSupabaseAdmin();
   const fromAt = vnDayStartToUtcIso(sinceDate);
 
-  const rows = await fetchAllRows<{ event_id: string | null; event_name: string | null }>((from, to) =>
-    supabase
-      .from("videos")
-      .select("event_id, event_name", { count: "exact" })
-      .eq("is_latest", true)
-      .not("event_id", "is", null)
-      .gte("published_at", fromAt)
-      // Thứ tự ổn định cho phân trang song song (xem fetchAllRows).
-      .order("content_id")
-      .range(from, to)
-  );
+  const run = () => supabase.rpc("videos_distinct_events_json", { from_at: fromAt });
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
+  if (error) throw error;
 
-  const map = new Map<string, string>();
-  rows.forEach((r) => {
-    if (r.event_id && !map.has(r.event_id)) map.set(r.event_id, r.event_name ?? r.event_id);
-  });
-  return Array.from(map.entries()).map(([_id, name]) => ({ _id, name }));
+  return (data ?? []) as EventOption[];
 }
 
 // ---------------------------------------------------------------------------
@@ -711,7 +705,11 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
   const supabase = getSupabaseAdmin();
   const fromDate = vnDaysAgo(windowDays - 1);
 
-  const { data, error } = await supabase.rpc("videos_trends_json", { from_date: fromDate });
+  const run = () => supabase.rpc("videos_trends_json", { from_date: fromDate });
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
   if (error) throw error;
 
   const result = (data ?? {}) as {
@@ -786,27 +784,40 @@ export type AnomalyResult = {
   creators: AnomalyCreatorItem[];
 };
 
-// windowDays mặc định 14 - đúng bằng cửa sổ giữ snapshot NGÀY của
+// Đọc kết quả videos_anomaly_json() đã TÍNH TRƯỚC (bảng anomaly_cache, ghi bởi
+// refresh_anomaly_cache() ngay sau mỗi lần sync - xem scripts/sync.ts) thay vì
+// gọi RPC tính real-time mỗi lần load trang. Lý do: videos_anomaly_json() dù đã
+// tối ưu (materialized CTE + baseline mean/stddev) vẫn phải quét ~100% dòng
+// snapshot trong cửa sổ (đúng bản chất bài toán "so mọi video với baseline") -
+// đo được ~25-30s trên instance hiện tại, vượt xa statement_timeout 8s của
+// PostgREST. Gọi thẳng RPC ở đây sẽ lặp lại đúng lỗi timeout từng gặp ở
+// /trends. windowDays mặc định 14 - đúng bằng cửa sổ giữ snapshot NGÀY của
 // videos_retention_cleanup (xa hơn co về 1 snapshot/tuần nên baseline theo
 // tuổi video không còn đáng tin).
 export async function computeAnomalies(windowDays = 14): Promise<AnomalyResult> {
   const supabase = getSupabaseAdmin();
-  const fromDate = vnDaysAgo(windowDays - 1);
 
-  const run = () => supabase.rpc("videos_anomaly_json", { from_date: fromDate });
-  let { data, error } = await run();
-  if (error && isStatementTimeout(error)) {
-    ({ data, error } = await run());
-  }
+  const { data, error } = await supabase
+    .from("anomaly_cache")
+    .select("window_days, data")
+    .eq("id", 1)
+    .maybeSingle();
   if (error) throw error;
 
-  const result = (data ?? {}) as {
+  // Chưa từng refresh (mới deploy/chưa chạy sync lần nào có bước refresh) -
+  // trả rỗng thay vì lỗi, để AnomalyTable hiển thị thông báo "chưa đủ dữ liệu"
+  // sẵn có thay vì banner lỗi đỏ.
+  if (!data) {
+    return { windowDays, videos: [], creators: [] };
+  }
+
+  const result = (data.data ?? {}) as {
     videos?: AnomalyVideoItem[];
     creators?: AnomalyCreatorItem[];
   };
 
   return {
-    windowDays,
+    windowDays: data.window_days ?? windowDays,
     videos: result.videos ?? [],
     creators: result.creators ?? [],
   };

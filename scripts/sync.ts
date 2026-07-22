@@ -16,6 +16,7 @@
 // chạy nhanh). Dùng khi cần cập nhật lại thông tin creator đã cũ - chạy chậm
 // hơn hẳn vì gọi lại API thật cho từng creator.
 
+import { Client } from "pg";
 import { extractChannelSync, runWithConcurrency, vnDaysAgo, vnToday, type ContentItem } from "../lib/api";
 import { resolveTikTokLink } from "../lib/linkResolver";
 import {
@@ -34,6 +35,37 @@ import { getCachedTokenExpiry, getVcToken } from "../lib/vcAuth";
 import { fetchContentsRangeServer, fetchUserDetailServer, VcServerError } from "../lib/vcServer";
 
 const DEFAULT_SYNC_WINDOW_DAYS = 90;
+const ANOMALY_CACHE_WINDOW_DAYS = 14; // khớp mặc định của computeAnomalies()/AnomalyTable
+
+// refresh_anomaly_cache() (xem supabase-migration-anomaly.sql) mất ~25-30s -
+// vượt xa statement_timeout 8s mà Supabase áp cho mọi request qua PostgREST
+// (kể cả dùng service role key, vì kết nối luôn đăng nhập bằng role
+// `authenticator` trước, statement_timeout gắn ở CẤP KẾT NỐI đó chứ không đổi
+// theo SET ROLE sau này). Vì vậy KHÔNG gọi qua supabase.rpc() (getSupabaseAdmin)
+// như các bước khác trong file này - phải mở kết nối Postgres trực tiếp bằng
+// SUPABASE_DB_URL. Không có biến này thì bỏ qua bước này (cảnh báo, không dừng
+// sync) - dữ liệu core (video/creator) đã lưu xong trước đó rồi.
+async function refreshAnomalyCache() {
+  const dbUrl = process.env.SUPABASE_DB_URL;
+  if (!dbUrl) {
+    console.log("  (Bỏ qua cập nhật anomaly cache - thiếu SUPABASE_DB_URL trong .env.local)");
+    return;
+  }
+
+  const client = new Client({ connectionString: dbUrl });
+  try {
+    await client.connect();
+    await client.query("select refresh_anomaly_cache($1)", [ANOMALY_CACHE_WINDOW_DAYS]);
+    console.log("Đã cập nhật anomaly cache (Signals - nghi mua view).");
+  } catch (err) {
+    console.error(
+      "  Cảnh báo: không cập nhật được anomaly cache -",
+      err instanceof Error ? err.message : err
+    );
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -187,6 +219,11 @@ async function main() {
   // snapshot/tuần) - không dọn thì bảng videos phình ~1M dòng/tháng.
   const deletedRows = await cleanupOldSnapshots();
   if (deletedRows > 0) console.log(`Đã dọn ${deletedRows} dòng snapshot cũ.`);
+
+  // Tính trước danh sách video/creator nghi mua view (Signals) - trang
+  // /trends chỉ đọc lại bảng anomaly_cache, không tự tính real-time (xem
+  // computeAnomalies() trong lib/supabaseData.ts).
+  await refreshAnomalyCache();
 
   console.log("");
   console.log(
