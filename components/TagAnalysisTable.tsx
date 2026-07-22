@@ -1,6 +1,6 @@
 "use client";
 
-import { formatNumber, type TagAnalysis } from "@/lib/api";
+import { formatNumber, formatPercent, type TagAnalysis } from "@/lib/api";
 
 type Props = {
   isLoading: boolean;
@@ -29,6 +29,7 @@ export default function TagAnalysisTable({ isLoading, data }: Props) {
               <th className="pb-2 pr-3 font-medium">Tag</th>
               <th className="pb-2 pr-3 font-medium">Video</th>
               <th className="pb-2 pr-3 font-medium">Avg views</th>
+              <th className="pb-2 pr-3 font-medium">Engagement</th>
               <th className="pb-2 font-medium">Tuần này</th>
             </tr>
           </thead>
@@ -36,7 +37,7 @@ export default function TagAnalysisTable({ isLoading, data }: Props) {
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={4} className="py-2">
+                  <td colSpan={5} className="py-2">
                     <div className="h-8 animate-pulse rounded-md bg-emerald-50/60" />
                   </td>
                 </tr>
@@ -56,6 +57,9 @@ export default function TagAnalysisTable({ isLoading, data }: Props) {
                   </td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.videos)}</td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.avgViews)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-gray-600">
+                    {formatPercent(row.engagementRate * 100)}
+                  </td>
                   <td className={`whitespace-nowrap py-2 ${row.isAnomalous ? "font-semibold text-red-600" : "text-gray-600"}`}>
                     {formatNumber(row.thisWeekVideos)} video
                     {row.isAnomalous && " ⚠"}
@@ -65,7 +69,7 @@ export default function TagAnalysisTable({ isLoading, data }: Props) {
 
             {!isLoading && sorted.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={5} className="py-6 text-center text-sm text-gray-400">
                   Không có tag nào trong khoảng thời gian đã chọn.
                 </td>
               </tr>

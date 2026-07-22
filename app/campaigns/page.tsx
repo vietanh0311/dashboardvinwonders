@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import useSWR from "swr";
 import CampaignLifecycleChart from "@/components/CampaignLifecycleChart";
 import CampaignTable from "@/components/CampaignTable";
-import CampaignTopCreatorsTable from "@/components/CampaignTopCreatorsTable";
 import ContentFilters from "@/components/ContentFilters";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
@@ -33,9 +32,9 @@ import {
   generateCampaignInsights,
   vnDaysAgo,
   vnToday,
-  type ContentFilters as ContentFiltersValue,
   type DateRangeValue,
 } from "@/lib/api";
+import { useUrlContentFilters, useUrlDateRange } from "@/lib/urlState";
 
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
@@ -44,11 +43,19 @@ function defaultRange(): DateRangeValue {
 const LIFECYCLE_LOOKBACK_DAYS = 89; // 90 ngày kể cả hôm nay
 
 export default function CampaignsPage() {
-  const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [selectedEventId, setSelectedEventId] = useState("");
-  const [filters, setFilters] = useState<ContentFiltersValue>({});
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-emerald-50/40" />}>
+      <CampaignsPageInner />
+    </Suspense>
+  );
+}
 
-  const content = useSWR(["vc-contents-campaigns", range.from, range.to], () =>
+function CampaignsPageInner() {
+  const [range, setRange] = useUrlDateRange(defaultRange);
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [filters, setFilters] = useUrlContentFilters();
+
+  const content = useSWR(["vc-contents", range.from, range.to], () =>
     fetchContentsSmart(range.from, range.to, false)
   );
 
@@ -112,9 +119,10 @@ export default function CampaignsPage() {
           <div className="flex flex-col gap-2">
             <Nav />
             <div>
-              <h1 className="text-xl font-semibold text-emerald-900">Campaigns - VinWonders</h1>
+              <h1 className="text-xl font-semibold text-emerald-900">Content - VinWonders</h1>
               <p className="text-sm text-gray-500">
-                Khoảng thời gian: <span className="font-medium text-gray-700">{rangeLabel}</span>
+                Khoảng thời gian: <span className="font-medium text-gray-700">{rangeLabel}</span> · nguồn, campaign,
+                tag, giờ đăng - tối ưu sản xuất &amp; phân bổ nội dung.
               </p>
             </div>
           </div>
@@ -155,9 +163,7 @@ export default function CampaignsPage() {
 
           <SourceComparisonTable isLoading={isLoading} data={sourceComparison} />
 
-          <CampaignTable isLoading={isLoading} data={campaignStats} />
-
-          <CampaignTopCreatorsTable />
+          <CampaignTable isLoading={isLoading} data={campaignStats} range={range} />
 
           <CampaignLifecycleChart
             events={eventsList.data ?? []}

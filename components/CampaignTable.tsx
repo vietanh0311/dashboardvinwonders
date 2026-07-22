@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatCurrency, formatNumber, formatPercent, type CampaignStat } from "@/lib/api";
+import Link from "next/link";
+import { formatCurrency, formatNumber, formatPercent, type CampaignStat, type DateRangeValue } from "@/lib/api";
 
 // Phân trang client-side để tránh render toàn bộ hàng đã sort vào DOM (giật
 // khi sort/lọc lại trên danh sách campaign lớn).
@@ -10,6 +11,7 @@ const PAGE_SIZE = 50;
 type Props = {
   isLoading: boolean;
   data: CampaignStat[];
+  range: DateRangeValue;
 };
 
 type SortKey =
@@ -42,7 +44,7 @@ function getSortValue(row: CampaignStat, key: SortKey): string | number {
   return row[key];
 }
 
-export default function CampaignTable({ isLoading, data }: Props) {
+export default function CampaignTable({ isLoading, data, range }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("cpv");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc"); // CPV thấp = hiệu quả nhất lên đầu
   const [page, setPage] = useState(0);
@@ -77,7 +79,10 @@ export default function CampaignTable({ isLoading, data }: Props) {
   return (
     <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
       <h3 className="mb-3 text-sm font-semibold text-gray-800">Hiệu quả campaign</h3>
-      <p className="mb-3 text-xs text-gray-400">Mặc định sắp theo CPV tăng dần - campaign hiệu quả nhất trên mỗi đồng ở trên cùng.</p>
+      <p className="mb-3 text-xs text-gray-400">
+        Mặc định sắp theo CPV tăng dần - campaign hiệu quả nhất trên mỗi đồng ở trên cùng. Bấm tên campaign để xem
+        creator của campaign đó ở trang Creators.
+      </p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -109,7 +114,14 @@ export default function CampaignTable({ isLoading, data }: Props) {
             {!isLoading &&
               paged.map((row) => (
                 <tr key={row.eventId} className="border-t border-gray-100">
-                  <td className="py-2 pr-3 font-medium text-gray-800">{row.eventName}</td>
+                  <td className="py-2 pr-3 font-medium text-gray-800">
+                    <Link
+                      href={`/creators?event=${encodeURIComponent(row.eventName)}&from=${range.from}&to=${range.to}`}
+                      className="hover:text-emerald-700 hover:underline"
+                    >
+                      {row.eventName}
+                    </Link>
+                  </td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.videos)}</td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.totalViews)}</td>
                   <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{formatNumber(row.uniqueCreators)}</td>

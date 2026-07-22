@@ -8,6 +8,7 @@ type Props = {
   campaignsOverCapCount: number;
   campaignsEndingSoonCount: number;
   creatorAttentionCount: number;
+  anomalyCount: number;
 };
 
 export default function AttentionSummaryCards({
@@ -16,6 +17,7 @@ export default function AttentionSummaryCards({
   campaignsOverCapCount,
   campaignsEndingSoonCount,
   creatorAttentionCount,
+  anomalyCount,
 }: Props) {
   const cards = [
     {
@@ -42,12 +44,18 @@ export default function AttentionSummaryCards({
       hint: "Vướng thanh toán hoặc ngôi sao im hơi",
       alert: creatorAttentionCount > 0,
     },
+    {
+      label: "Video nghi bất thường",
+      value: formatNumber(anomalyCount),
+      hint: "Nghi mua view - xem chi tiết ở Signals",
+      alert: anomalyCount > 0,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {isLoading &&
-        Array.from({ length: 4 }).map((_, i) => (
+        Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="h-24 animate-pulse rounded-xl border border-emerald-100 bg-emerald-50/50" />
         ))}
 

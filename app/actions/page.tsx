@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import useSWR from "swr";
+import AnomalyTable from "@/components/AnomalyTable";
 import AttentionSummaryCards from "@/components/AttentionSummaryCards";
 import CampaignWatchlistTable from "@/components/CampaignWatchlistTable";
 import ContentFilters from "@/components/ContentFilters";
@@ -22,18 +23,19 @@ import {
   computeCreatorStats,
   computeEngagementCompliance,
   countVnWeeksInRange,
+  fetchAnomalies,
   fetchContentsSmart,
   fetchCreatorProfilesFromSupabase,
   fetchLastSync,
   filterContentItems,
   vnDaysAgo,
   vnToday,
-  type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
+import { useUrlContentFilters, useUrlDateRange } from "@/lib/urlState";
 
 // Mặc định 30 ngày (rộng hơn 7 ngày của Dashboard/Campaigns): trang này để rà soát định kỳ, không
 // phải xem nhanh hằng ngày, nên cần đủ dài để không bỏ sót campaign/video cần xử lý.
@@ -42,11 +44,19 @@ function defaultRange(): DateRangeValue {
 }
 
 export default function ActionsPage() {
-  const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [filters, setFilters] = useState<ContentFiltersValue>({});
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-emerald-50/40" />}>
+      <ActionsPageInner />
+    </Suspense>
+  );
+}
+
+function ActionsPageInner() {
+  const [range, setRange] = useUrlDateRange(defaultRange);
+  const [filters, setFilters] = useUrlContentFilters();
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
 
-  const content = useSWR(["vc-contents-actions", range.from, range.to], () =>
+  const content = useSWR(["vc-contents", range.from, range.to], () =>
     fetchContentsSmart(range.from, range.to, false)
   );
 
@@ -60,6 +70,10 @@ export default function ActionsPage() {
 
   const lastSync = useSWR(LAST_SYNC_SWR_KEY, fetchLastSync, { revalidateOnFocus: false });
   const referenceDate = lastSync.data?.snapshotDate ?? vnToday();
+
+  // Cùng SWR key với /trends (Signals) - dùng chung cache, không tốn thêm request khi 2 trang
+  // mở trong cùng phiên.
+  const anomalies = useSWR("vc-anomalies", () => fetchAnomalies(14));
 
   const isLoading = !content.data || !supabaseCreators.data;
   const isValidating = content.isValidating || supabaseCreators.isValidating;
@@ -113,6 +127,7 @@ export default function ActionsPage() {
   const refresh = () => {
     content.mutate();
     supabaseCreators.mutate();
+    anomalies.mutate();
   };
 
   const selectedCreator = creatorsWithTier.find((c) => c.creatorId === selectedCreatorId) ?? null;
@@ -163,6 +178,7 @@ export default function ActionsPage() {
             campaignsOverCapCount={campaignsOverCapCount}
             campaignsEndingSoonCount={campaignsEndingSoonCount}
             creatorAttentionCount={creatorAttention.length}
+            anomalyCount={anomalies.data?.videos.length ?? 0}
           />
 
           <EngagementRiskTable isLoading={isLoading} data={compliance.atRiskItems} />
@@ -173,6 +189,12 @@ export default function ActionsPage() {
             isLoading={isLoading}
             data={creatorAttention}
             onSelectCreator={setSelectedCreatorId}
+          />
+
+          <AnomalyTable
+            isLoading={anomalies.isLoading}
+            data={anomalies.data?.videos ?? []}
+            windowDays={anomalies.data?.windowDays ?? 14}
           />
         </div>
       </div>

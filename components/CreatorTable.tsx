@@ -30,12 +30,15 @@ const COPY_HEADERS = [
   "Hợp đồng",
 ];
 
+type AnomalySummary = { count: number; maxScore: number };
+
 type Props = {
   data: CreatorWithTier[];
   isLoading: boolean;
   profiles: Map<string, UserDetail>;
   channelSummaries: Map<string, CreatorChannelsSummary>;
   onSelectCreator: (creatorId: string) => void;
+  anomalies?: Map<string, AnomalySummary>;
 };
 
 type SortKey =
@@ -93,7 +96,14 @@ function NotLoadedCell() {
   return <span className="text-xs italic text-gray-300">chưa tải</span>;
 }
 
-export default function CreatorTable({ data, isLoading, profiles, channelSummaries, onSelectCreator }: Props) {
+export default function CreatorTable({
+  data,
+  isLoading,
+  profiles,
+  channelSummaries,
+  onSelectCreator,
+  anomalies,
+}: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("totalViews");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
@@ -202,13 +212,26 @@ export default function CreatorTable({ data, isLoading, profiles, channelSummari
               paged.map((row) => {
                 const profile = profiles.get(row.creatorId);
                 const channels = channelSummaries.get(row.creatorId);
+                const anomaly = anomalies?.get(row.creatorId);
                 return (
                   <tr
                     key={row.creatorId}
                     onClick={() => onSelectCreator(row.creatorId)}
                     className="cursor-pointer border-t border-gray-100 hover:bg-emerald-50/50"
                   >
-                    <td className="whitespace-nowrap py-2 pr-3 font-medium text-gray-800">{row.name}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 font-medium text-gray-800">
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.name}
+                        {anomaly && (
+                          <span
+                            title={`${anomaly.count} video nghi bất thường, điểm cao nhất ${anomaly.maxScore}/100 - xem chi tiết ở Signals`}
+                            className="whitespace-nowrap rounded-full bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600"
+                          >
+                            ⚠ {anomaly.count}
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-gray-600">{row.workplaceUnitName ?? "-"}</td>
                     <td className="whitespace-nowrap py-2 pr-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TIER_BADGE[row.tier]}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import useSWR from "swr";
 import ConcentrationRiskCard from "@/components/ConcentrationRiskCard";
 import ContentFilters from "@/components/ContentFilters";
@@ -33,6 +33,7 @@ import {
   computeUnitComparison,
   countVnWeeksInRange,
   daysSince,
+  fetchAnomalies,
   fetchContentsSmart,
   fetchCreatorIdsInRangeFromSupabase,
   fetchCreatorProfilesFromSupabase,
@@ -40,12 +41,12 @@ import {
   generateCreatorInsights,
   vnDaysAgo,
   vnToday,
-  type ContentFilters as ContentFiltersValue,
   type ContentItem,
   type CreatorChannelsSummary,
   type DateRangeValue,
   type UserDetail,
 } from "@/lib/api";
+import { useUrlContentFilters, useUrlDateRange } from "@/lib/urlState";
 
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
@@ -56,8 +57,16 @@ function defaultRange(): DateRangeValue {
 const EMPTY_CREATOR_IDS = new Set<string>();
 
 export default function CreatorsPage() {
-  const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [filters, setFilters] = useState<ContentFiltersValue>({});
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-emerald-50/40" />}>
+      <CreatorsPageInner />
+    </Suspense>
+  );
+}
+
+function CreatorsPageInner() {
+  const [range, setRange] = useUrlDateRange(defaultRange);
+  const [filters, setFilters] = useUrlContentFilters();
 
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
 
@@ -65,7 +74,7 @@ export default function CreatorsPage() {
   const [filterNoContract, setFilterNoContract] = useState(false);
   const [filterInactive30, setFilterInactive30] = useState(false);
 
-  const current = useSWR(["vc-contents-creators", range.from, range.to], () =>
+  const current = useSWR(["vc-contents", range.from, range.to], () =>
     fetchContentsSmart(range.from, range.to, false)
   );
 
@@ -84,7 +93,7 @@ export default function CreatorsPage() {
   // computeCreatorStats bên dưới (concentration trend + momentum leaderboard đều so views
   // theo creator giữa 2 kỳ, previousCreatorIds ở trên không đủ vì chỉ có id, không có views).
   const previousContent = useSWR(
-    ["vc-contents-creators-prev", previousFrom, previousTo],
+    ["vc-contents", previousFrom, previousTo],
     () => fetchContentsSmart(previousFrom, previousTo, false)
   );
   const previousContentItems = useMemo(
@@ -100,6 +109,21 @@ export default function CreatorsPage() {
     () => supabaseCreators.data ?? new Map<string, UserDetail>(),
     [supabaseCreators.data]
   );
+
+  // Cùng SWR key với /trends (Signals) - dùng chung cache, không tốn thêm request khi 2 trang
+  // mở trong cùng phiên.
+  const anomalies = useSWR("vc-anomalies", () => fetchAnomalies(14));
+  const anomaliesByCreator = useMemo(() => {
+    const map = new Map<string, { count: number; maxScore: number }>();
+    (anomalies.data?.videos ?? []).forEach((v) => {
+      if (!v.creatorId) return;
+      const entry = map.get(v.creatorId) ?? { count: 0, maxScore: 0 };
+      entry.count += 1;
+      entry.maxScore = Math.max(entry.maxScore, v.score);
+      map.set(v.creatorId, entry);
+    });
+    return map;
+  }, [anomalies.data]);
 
   // !data thay vì SWR isLoading: giữ dữ liệu range trước hiển thị (nhờ
   // keepPreviousData ở SWRProvider) thay vì skeleton trắng mỗi lần đổi date range.
@@ -226,6 +250,7 @@ export default function CreatorsPage() {
     current.mutate();
     previous.mutate();
     previousContent.mutate();
+    anomalies.mutate();
   };
 
   const selectedCreator = creatorsWithTier.find((c) => c.creatorId === selectedCreatorId) ?? null;
@@ -317,6 +342,7 @@ export default function CreatorsPage() {
           profiles={userProfiles}
           channelSummaries={channelSummaries}
           onSelectCreator={setSelectedCreatorId}
+          anomalies={anomaliesByCreator}
         />
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

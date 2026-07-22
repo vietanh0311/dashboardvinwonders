@@ -1,47 +1,52 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import useSWR from "swr";
 import ContentFilters from "@/components/ContentFilters";
-import ContentTable from "@/components/ContentTable";
 import DailyChart from "@/components/DailyChart";
 import DataErrorBanner from "@/components/DataErrorBanner";
 import DataUpdateBanner from "@/components/DataUpdateBanner";
 import DateRangePicker from "@/components/DateRangePicker";
-import EventTable from "@/components/EventTable";
 import InsightsPanel from "@/components/InsightsPanel";
 import KpiCards from "@/components/KpiCards";
 import { LAST_SYNC_SWR_KEY } from "@/components/LastSyncBadge";
 import Nav from "@/components/Nav";
 import RefreshIndicator from "@/components/RefreshIndicator";
-import SourceComparisonTable from "@/components/SourceComparisonTable";
-import TagTable from "@/components/TagTable";
 import TopCreatorsCard from "@/components/TopCreatorsCard";
 import TopVideosCard from "@/components/TopVideosCard";
-import UnitComparisonTable from "@/components/UnitComparisonTable";
+import WeekOverWeekCards from "@/components/WeekOverWeekCards";
 import {
   computeCreatorStats,
   computeMetrics,
   computeSourceComparison,
   computeTagAnalysis,
-  computeUnitComparison,
+  EMPTY_PERIOD_METRICS,
   fetchContentsSmart,
   fetchLastSync,
+  fetchTrends,
   filterContentItems,
   generateDashboardInsights,
   vnDaysAgo,
   vnToday,
-  type ContentFilters as ContentFiltersValue,
   type DateRangeValue,
 } from "@/lib/api";
+import { useUrlContentFilters, useUrlDateRange } from "@/lib/urlState";
 
 function defaultRange(): DateRangeValue {
   return { from: vnDaysAgo(6), to: vnToday() };
 }
 
 export default function DashboardPage() {
-  const [range, setRange] = useState<DateRangeValue>(defaultRange);
-  const [filters, setFilters] = useState<ContentFiltersValue>({});
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-emerald-50/40" />}>
+      <DashboardPageInner />
+    </Suspense>
+  );
+}
+
+function DashboardPageInner() {
+  const [range, setRange] = useUrlDateRange(defaultRange);
+  const [filters, setFilters] = useUrlContentFilters();
 
   const { data, error, isValidating, mutate } = useSWR(
     ["vc-contents", range.from, range.to],
@@ -62,12 +67,17 @@ export default function DashboardPage() {
   const lastSync = useSWR(LAST_SYNC_SWR_KEY, fetchLastSync, { revalidateOnFocus: false });
   const referenceDate = lastSync.data?.snapshotDate ?? vnToday();
 
+  // Cùng SWR key với /trends (Signals) - dùng chung cache, không tốn thêm request khi 2 trang
+  // mở trong cùng phiên. Cần lịch sử snapshot Supabase nên có thể rỗng nếu chưa sync đủ ngày.
+  const trends = useSWR("vc-trends", () => fetchTrends(14));
+
   const filteredData = useMemo(() => filterContentItems(data ?? [], filters), [data, filters]);
   const metrics = useMemo(() => computeMetrics(filteredData), [filteredData]);
+  // Không hiển thị bảng riêng cho 2 cái này nữa (xem SourceComparisonTable ở trang Content,
+  // TagAnalysisTable ở trang Content) - vẫn phải tính vì generateDashboardInsights cần chúng.
   const sourceComparison = useMemo(() => computeSourceComparison(filteredData), [filteredData]);
   const tagAnalysis = useMemo(() => computeTagAnalysis(filteredData), [filteredData]);
   const creatorStats = useMemo(() => computeCreatorStats(filteredData), [filteredData]);
-  const unitComparison = useMemo(() => computeUnitComparison(creatorStats), [creatorStats]);
 
   const insights = useMemo(
     () => generateDashboardInsights(metrics, sourceComparison, tagAnalysis, filteredData),
@@ -76,11 +86,6 @@ export default function DashboardPage() {
 
   const videosToday = metrics.byDay.find((d) => d.date === referenceDate)?.videos ?? 0;
   const avgViewsPerVideo = metrics.totalVideos > 0 ? metrics.totalViews / metrics.totalVideos : 0;
-
-  const latestContents = useMemo(
-    () => [...filteredData].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1)).slice(0, 100),
-    [filteredData]
-  );
 
   const rangeLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
   return (
@@ -133,23 +138,18 @@ export default function DashboardPage() {
             avgViewsPerVideo={avgViewsPerVideo}
           />
 
+          <WeekOverWeekCards
+            isLoading={!trends.data}
+            thisWeek={trends.data?.weekOverWeek?.thisWeek ?? EMPTY_PERIOD_METRICS}
+            lastWeek={trends.data?.weekOverWeek?.lastWeek ?? EMPTY_PERIOD_METRICS}
+          />
+
           <DailyChart isLoading={isLoading} byDay={metrics.byDay} bySource={metrics.bySource} />
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <TopCreatorsCard data={creatorStats} isLoading={isLoading} />
             <TopVideosCard items={filteredData} isLoading={isLoading} />
           </div>
-
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <EventTable data={metrics.byEvent} isLoading={isLoading} />
-            <TagTable data={metrics.byTag} isLoading={isLoading} />
-          </div>
-
-          <SourceComparisonTable data={sourceComparison} isLoading={isLoading} />
-
-          <UnitComparisonTable data={unitComparison} isLoading={isLoading} />
-
-          <ContentTable items={latestContents} isLoading={isLoading} />
         </div>
       </div>
     </main>

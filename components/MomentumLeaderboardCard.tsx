@@ -77,19 +77,25 @@ export default function MomentumLeaderboardCard({ isLoading, data, onSelectCreat
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <MomentumList
-        title="Đang lên - views tăng mạnh nhất so với kỳ trước"
-        items={data.risers}
-        emptyText="Chưa đủ dữ liệu để xếp hạng creator tăng trưởng."
-        onSelectCreator={onSelectCreator}
-      />
-      <MomentumList
-        title="Đang giảm - cần chú ý"
-        items={data.decliners}
-        emptyText="Chưa đủ dữ liệu để xếp hạng creator sụt giảm."
-        onSelectCreator={onSelectCreator}
-      />
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-gray-400">
+        So sánh tổng views của creator giữa kỳ đang xem và kỳ trước đó - phản ánh sản lượng theo kỳ, không phải tốc
+        độ tăng view thực (xem tốc độ tăng view thật ở trang Signals).
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <MomentumList
+          title="Đang lên - views tăng mạnh nhất so với kỳ trước"
+          items={data.risers}
+          emptyText="Chưa đủ dữ liệu để xếp hạng creator tăng trưởng."
+          onSelectCreator={onSelectCreator}
+        />
+        <MomentumList
+          title="Đang giảm - cần chú ý"
+          items={data.decliners}
+          emptyText="Chưa đủ dữ liệu để xếp hạng creator sụt giảm."
+          onSelectCreator={onSelectCreator}
+        />
+      </div>
     </div>
   );
 }
