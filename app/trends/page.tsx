@@ -1,33 +1,23 @@
 "use client";
 
 import useSWR from "swr";
+import AnomalyTable from "@/components/AnomalyTable";
 import DailyViewsChart from "@/components/DailyViewsChart";
 import InsightsPanel from "@/components/InsightsPanel";
 import Nav from "@/components/Nav";
 import VelocityTable from "@/components/VelocityTable";
-import WeekOverWeekCards from "@/components/WeekOverWeekCards";
-import { fetchTrends, formatNumber, formatPercent, type PeriodMetrics } from "@/lib/api";
-
-const EMPTY_PERIOD: PeriodMetrics = {
-  from: "",
-  to: "",
-  videos: 0,
-  views: 0,
-  likes: 0,
-  comments: 0,
-  creators: 0,
-  avgViewsPerVideo: 0,
-};
+import { EMPTY_PERIOD_METRICS, fetchAnomalies, fetchTrends, formatNumber, formatPercent } from "@/lib/api";
 
 export default function TrendsPage() {
   const { data, error, isLoading, isValidating, mutate } = useSWR("vc-trends", () => fetchTrends(14));
+  const anomalies = useSWR("vc-anomalies", () => fetchAnomalies(14));
 
   const insights: string[] = [];
   if (data) {
     // Không destructure trực tiếp data.weekOverWeek - phòng trường hợp response
     // thiếu field dù fetchTrends() đã có fallback, tránh throw khi render.
-    const thisWeek = data.weekOverWeek?.thisWeek ?? EMPTY_PERIOD;
-    const lastWeek = data.weekOverWeek?.lastWeek ?? EMPTY_PERIOD;
+    const thisWeek = data.weekOverWeek?.thisWeek ?? EMPTY_PERIOD_METRICS;
+    const lastWeek = data.weekOverWeek?.lastWeek ?? EMPTY_PERIOD_METRICS;
     if (lastWeek.views > 0) {
       const diff = ((thisWeek.views - lastWeek.views) / lastWeek.views) * 100;
       insights.push(
@@ -54,6 +44,12 @@ export default function TrendsPage() {
       );
     }
   }
+  if (anomalies.data && anomalies.data.videos.length > 0) {
+    const topAnomaly = anomalies.data.videos[0];
+    insights.push(
+      `"${topAnomaly.title || "(không có tiêu đề)"}" (creator: ${topAnomaly.creatorName}) có dấu hiệu bất thường điểm ${topAnomaly.score}/100 ngày ${topAnomaly.snapshotDate} - xem bảng bên dưới, chỉ để tham khảo.`
+    );
+  }
 
   return (
     <main className="min-h-screen bg-emerald-50/40">
@@ -62,16 +58,19 @@ export default function TrendsPage() {
           <div className="flex flex-col gap-2">
             <Nav />
             <div>
-              <h1 className="text-xl font-semibold text-emerald-900">Trends - VinWonders</h1>
+              <h1 className="text-xl font-semibold text-emerald-900">Signals - VinWonders</h1>
               <p className="text-sm text-gray-500">
-                View velocity &amp; so sánh tuần - chỉ có được nhờ lịch sử đã sync vào Supabase.
+                View velocity thật &amp; dấu hiệu bất thường - chỉ có được nhờ lịch sử đã sync vào Supabase.
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={() => mutate()}
+            onClick={() => {
+              mutate();
+              anomalies.mutate();
+            }}
             disabled={isValidating}
             className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 disabled:opacity-50"
           >
@@ -89,15 +88,15 @@ export default function TrendsPage() {
 
         <InsightsPanel isLoading={isLoading} insights={insights} />
 
-        <WeekOverWeekCards
-          isLoading={isLoading}
-          thisWeek={data?.weekOverWeek?.thisWeek ?? EMPTY_PERIOD}
-          lastWeek={data?.weekOverWeek?.lastWeek ?? EMPTY_PERIOD}
-        />
-
         <DailyViewsChart isLoading={isLoading} data={Array.isArray(data?.dailyTotals) ? data.dailyTotals : []} />
 
         <VelocityTable isLoading={isLoading} data={Array.isArray(data?.velocity) ? data.velocity : []} />
+
+        <AnomalyTable
+          isLoading={anomalies.isLoading}
+          data={anomalies.data?.videos ?? []}
+          windowDays={anomalies.data?.windowDays ?? 14}
+        />
       </div>
     </main>
   );

@@ -6,9 +6,9 @@ import LastSyncBadge from "@/components/LastSyncBadge";
 
 const LINKS = [
   { href: "/", label: "Dashboard" },
+  { href: "/campaigns", label: "Content" },
   { href: "/creators", label: "Creators" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/trends", label: "Trends" },
+  { href: "/trends", label: "Signals" },
   { href: "/actions", label: "Cần xử lý" },
 ];
 

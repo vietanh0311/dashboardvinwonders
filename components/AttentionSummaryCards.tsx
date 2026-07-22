@@ -8,6 +8,7 @@ type Props = {
   campaignsOverCapCount: number;
   campaignsEndingSoonCount: number;
   creatorAttentionCount: number;
+  anomalyCount: number;
   duplicateContentCount: number;
   offChannelViolationCount: number;
 };
@@ -18,6 +19,7 @@ export default function AttentionSummaryCards({
   campaignsOverCapCount,
   campaignsEndingSoonCount,
   creatorAttentionCount,
+  anomalyCount,
   duplicateContentCount,
   offChannelViolationCount,
 }: Props) {
@@ -47,6 +49,12 @@ export default function AttentionSummaryCards({
       alert: creatorAttentionCount > 0,
     },
     {
+      label: "Video nghi bất thường",
+      value: formatNumber(anomalyCount),
+      hint: "Nghi mua view - xem chi tiết ở Signals",
+      alert: anomalyCount > 0,
+    },
+    {
       label: "Link nộp trùng lặp",
       value: formatNumber(duplicateContentCount),
       hint: "Cùng 1 link ở nhiều lượt nộp",
@@ -61,9 +69,9 @@ export default function AttentionSummaryCards({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {isLoading &&
-        Array.from({ length: 6 }).map((_, i) => (
+        Array.from({ length: 7 }).map((_, i) => (
           <div key={i} className="h-24 animate-pulse rounded-xl border border-emerald-100 bg-emerald-50/50" />
         ))}
 

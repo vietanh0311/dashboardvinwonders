@@ -4,8 +4,8 @@ import { format, parseISO } from "date-fns";
 import useSWR from "swr";
 import { fetchLastSync } from "@/lib/api";
 
-// Key SWR dùng chung - SyncButton gọi mutate(LAST_SYNC_SWR_KEY) sau khi sync
-// xong để badge này tự cập nhật ngay, không cần refresh trang.
+// Key SWR dùng chung cho mọi trang - badge tự bắt kịp lần sync mới nhất nhờ
+// refreshInterval của SWRProvider (poll 5 phút/lần), không cần ai gọi mutate() tay.
 export const LAST_SYNC_SWR_KEY = "vc-last-sync";
 
 export default function LastSyncBadge() {

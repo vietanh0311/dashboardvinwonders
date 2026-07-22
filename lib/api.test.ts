@@ -426,8 +426,8 @@ describe("CAMPAIGN_INSIGHT_RULES", () => {
 
   test("tag-anomaly: chỉ báo tag có isAnomalous = true", () => {
     const tagAnalysis: TagAnalysis[] = [
-      { name: "Bình thường", videos: 5, avgViews: 100, thisWeekVideos: 1, priorAvgWeeklyVideos: 1, isAnomalous: false },
-      { name: "Bất thường", videos: 5, avgViews: 100, thisWeekVideos: 10, priorAvgWeeklyVideos: 1, isAnomalous: true },
+      { name: "Bình thường", videos: 5, avgViews: 100, engagementRate: 0.02, thisWeekVideos: 1, priorAvgWeeklyVideos: 1, isAnomalous: false },
+      { name: "Bất thường", videos: 5, avgViews: 100, engagementRate: 0.02, thisWeekVideos: 10, priorAvgWeeklyVideos: 1, isAnomalous: true },
     ];
     const text = ruleById("tag-anomaly").evaluate({ ...emptyCtx, tagAnalysis });
     expect(text).toContain("Bất thường");
@@ -449,7 +449,7 @@ describe("generateCampaignInsights", () => {
   test("giới hạn tối đa 6 insight", () => {
     const viewDist: ViewDistribution = { median: 100, mean: 500, flopCount: 5, flopPct: 20, viralCount: 1, viralPct: 5, histogram: [] };
     const tagAnalysis: TagAnalysis[] = [
-      { name: "Tag lạ", videos: 5, avgViews: 100, thisWeekVideos: 10, priorAvgWeeklyVideos: 1, isAnomalous: true },
+      { name: "Tag lạ", videos: 5, avgViews: 100, engagementRate: 0.02, thisWeekVideos: 10, priorAvgWeeklyVideos: 1, isAnomalous: true },
     ];
     const campaigns: CampaignStat[] = [
       makeCampaignStat({ eventId: "a", eventName: "A", cpv: 0.1 }),

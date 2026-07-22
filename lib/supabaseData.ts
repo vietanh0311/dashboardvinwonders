@@ -99,8 +99,8 @@ export function contentItemToVideoRow(
 }
 
 // Lưu ý: bảng videos KHÔNG lưu cover (ảnh thumbnail) để giữ DB nhẹ, nên
-// ContentItem dựng từ Supabase sẽ không có ảnh preview (ContentTable/CreatorDrawer
-// tự fallback sang ô xám khi cover rỗng).
+// ContentItem dựng từ Supabase sẽ không có ảnh preview (CreatorDrawer tự
+// fallback sang ô xám khi cover rỗng).
 export function videoRowToContentItem(row: VideoRow): ContentItem {
   return {
     _id: row.content_id,
@@ -740,6 +740,75 @@ export async function computeTrends(windowDays = 14): Promise<TrendsResult> {
       lastWeek: result.lastWeek ?? emptyPeriod(fromDate, fromDate),
     },
     dailyTotals: result.dailyTotals ?? [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /trends (Signals): phát hiện video/creator nghi buff view - xem
+// supabase-migration-anomaly.sql cho toàn bộ logic tính điểm (chạy trong SQL,
+// app chỉ nhận về danh sách đã lọc + chấm điểm).
+// ---------------------------------------------------------------------------
+
+export type AnomalyReason =
+  | "velocity_spike"
+  | "late_spike"
+  | "engagement_mismatch"
+  | "negative_views"
+  | "creator_cluster";
+
+export type AnomalyVideoItem = {
+  contentId: string;
+  title: string;
+  link: string;
+  source: string;
+  creatorId: string | null;
+  creatorName: string;
+  eventName: string | null;
+  snapshotDate: string;
+  views: number;
+  deltaViews: number;
+  deltaHours: number;
+  score: number;
+  reasons: AnomalyReason[];
+};
+
+export type AnomalyCreatorItem = {
+  creatorId: string;
+  creatorName: string;
+  snapshotDate: string;
+  flaggedVideoCount: number;
+  maxScore: number;
+};
+
+export type AnomalyResult = {
+  windowDays: number;
+  videos: AnomalyVideoItem[];
+  creators: AnomalyCreatorItem[];
+};
+
+// windowDays mặc định 14 - đúng bằng cửa sổ giữ snapshot NGÀY của
+// videos_retention_cleanup (xa hơn co về 1 snapshot/tuần nên baseline theo
+// tuổi video không còn đáng tin).
+export async function computeAnomalies(windowDays = 14): Promise<AnomalyResult> {
+  const supabase = getSupabaseAdmin();
+  const fromDate = vnDaysAgo(windowDays - 1);
+
+  const run = () => supabase.rpc("videos_anomaly_json", { from_date: fromDate });
+  let { data, error } = await run();
+  if (error && isStatementTimeout(error)) {
+    ({ data, error } = await run());
+  }
+  if (error) throw error;
+
+  const result = (data ?? {}) as {
+    videos?: AnomalyVideoItem[];
+    creators?: AnomalyCreatorItem[];
+  };
+
+  return {
+    windowDays,
+    videos: result.videos ?? [],
+    creators: result.creators ?? [],
   };
 }
 

@@ -161,7 +161,11 @@ type UserDetailResponse = {
 };
 
 // ---------------------------------------------------------------------------
-// Token lưu phía client (localStorage) - dùng cho TokenSettings + vcFetch
+// Token lưu phía client (localStorage) - đọc bởi vcFetch cho nhánh realtime
+// (fetchContentsRange khi options.realtime=true). Hiện KHÔNG có UI nào ghi vào
+// đây nữa (UI dán token cũ đã bị gỡ) nên nhánh này đang ở trạng thái không
+// dùng tới trong thực tế - giữ lại vì fetchContentsSmart() vẫn nhận tham số
+// realtime, chưa xoá hẳn để không phải đổi luôn cách sync/fetch dữ liệu.
 // ---------------------------------------------------------------------------
 
 const TOKEN_STORAGE_KEY = "vc-token";
@@ -2405,6 +2409,7 @@ export type TagAnalysis = {
   name: string;
   videos: number;
   avgViews: number;
+  engagementRate: number; // (likes + comments) / views - chất lượng tương tác, không chỉ số lượng
   thisWeekVideos: number;
   priorAvgWeeklyVideos: number;
   isAnomalous: boolean;
@@ -2422,20 +2427,24 @@ const AI_AUTO_TAGS = new Set([
 
 export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
   const tagWeekly = new Map<string, Map<string, number>>();
-  const tagTotals = new Map<string, { videos: number; totalViews: number }>();
+  const tagTotals = new Map<string, { videos: number; totalViews: number; likes: number; comments: number }>();
   const allWeeks = new Set<string>();
 
   items.forEach((item) => {
     const week = toVnWeekKey(item.publishedAt || item.createdAt);
     if (week) allWeeks.add(week);
     const views = item.statistic?.view?.total ?? 0;
+    const likes = item.statistic?.like?.total ?? 0;
+    const comments = item.statistic?.comment?.total ?? 0;
 
     (item.warningTags ?? []).forEach((tag) => {
       if (!tag?.name || AI_AUTO_TAGS.has(tag.name)) return;
 
-      const totals = tagTotals.get(tag.name) ?? { videos: 0, totalViews: 0 };
+      const totals = tagTotals.get(tag.name) ?? { videos: 0, totalViews: 0, likes: 0, comments: 0 };
       totals.videos += 1;
       totals.totalViews += views;
+      totals.likes += likes;
+      totals.comments += comments;
       tagTotals.set(tag.name, totals);
 
       if (week) {
@@ -2465,6 +2474,7 @@ export function computeTagAnalysis(items: ContentItem[]): TagAnalysis[] {
         name,
         videos: v.videos,
         avgViews: v.videos > 0 ? v.totalViews / v.videos : 0,
+        engagementRate: v.totalViews > 0 ? (v.likes + v.comments) / v.totalViews : 0,
         thisWeekVideos,
         priorAvgWeeklyVideos,
         isAnomalous,
@@ -3396,7 +3406,7 @@ export type TrendsResult = {
   dailyTotals: { date: string; views: number; videos: number }[];
 };
 
-const EMPTY_PERIOD_METRICS: PeriodMetrics = {
+export const EMPTY_PERIOD_METRICS: PeriodMetrics = {
   from: "",
   to: "",
   videos: 0,
@@ -3429,6 +3439,66 @@ export async function fetchTrends(windowDays = 14): Promise<TrendsResult> {
       lastWeek: data.weekOverWeek?.lastWeek ?? EMPTY_PERIOD_METRICS,
     },
     dailyTotals: Array.isArray(data.dailyTotals) ? data.dailyTotals : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /trends (Signals): video/creator nghi buff view - xem
+// supabase-migration-anomaly.sql cho logic tính điểm 0-100 + lý do.
+// ---------------------------------------------------------------------------
+
+export type AnomalyReason =
+  | "velocity_spike"
+  | "late_spike"
+  | "engagement_mismatch"
+  | "negative_views"
+  | "creator_cluster";
+
+export type AnomalyVideoItem = {
+  contentId: string;
+  title: string;
+  link: string;
+  source: string;
+  creatorId: string | null;
+  creatorName: string;
+  eventName: string | null;
+  snapshotDate: string;
+  views: number;
+  deltaViews: number;
+  deltaHours: number;
+  score: number;
+  reasons: AnomalyReason[];
+};
+
+export type AnomalyCreatorItem = {
+  creatorId: string;
+  creatorName: string;
+  snapshotDate: string;
+  flaggedVideoCount: number;
+  maxScore: number;
+};
+
+export type AnomalyResult = {
+  windowDays: number;
+  videos: AnomalyVideoItem[];
+  creators: AnomalyCreatorItem[];
+};
+
+const EMPTY_ANOMALY_RESULT: AnomalyResult = {
+  windowDays: 0,
+  videos: [],
+  creators: [],
+};
+
+export async function fetchAnomalies(windowDays = 14): Promise<AnomalyResult> {
+  const res = await jsonFetch<{ data?: Partial<AnomalyResult> | null }>(`/api/data/anomaly?days=${windowDays}`);
+  const data = res?.data;
+  if (!data) return EMPTY_ANOMALY_RESULT;
+
+  return {
+    windowDays: typeof data.windowDays === "number" ? data.windowDays : 0,
+    videos: Array.isArray(data.videos) ? data.videos : [],
+    creators: Array.isArray(data.creators) ? data.creators : [],
   };
 }
 
