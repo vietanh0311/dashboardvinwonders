@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 // Error boundary cấp route (Next.js App Router) - bắt mọi lỗi throw ra trong
 // lúc render/effect ở bất kỳ trang nào dưới app/ (trừ lỗi trong chính
@@ -29,12 +30,12 @@ export default function RouteError({ error, reset }: { error: Error & { digest?:
           >
             Thử lại
           </button>
-          <a
+          <Link
             href="/"
             className="rounded-md border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
           >
             Về Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </main>
