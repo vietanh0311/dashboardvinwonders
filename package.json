@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "sync": "tsx --env-file=.env.local scripts/sync.ts",
     "sync-users": "tsx --env-file=.env.local scripts/sync-all-users.ts",
     "verify-login": "tsx --env-file=.env.local scripts/verify-vc-login.ts",
@@ -15,21 +15,21 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "date-fns": "^3.6.0",
-    "next": "^14.2.35",
+    "next": "15.5.21",
     "pg": "^8.22.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "recharts": "^2.12.7",
     "swr": "^2.2.5"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "autoprefixer": "^10.4.19",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.5",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.21",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "tsx": "^4.23.1",
@@ -39,5 +39,9 @@
   "allowScripts": {
     "fsevents@2.3.3": true,
     "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3"
   }
 }

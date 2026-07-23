@@ -9,7 +9,7 @@ const VC_API_BASE_URL = (process.env.VC_API_BASE_URL || "https://vcreator-admin-
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest, context: { params: { path: string[] } }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   // Ưu tiên token client gửi lên (localStorage, qua TokenSettings cũ); nếu
   // không có thì dùng token cấu hình server-side - từ khi UI nhập token bị ẩn
   // (commit 45153cc), client không còn cách nào tự cung cấp token nữa.
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, context: { params: { path: string[] 
     );
   }
 
-  const pathSegments = context.params.path ?? [];
+  const pathSegments = (await context.params).path ?? [];
   const targetUrl = `${VC_API_BASE_URL}/${pathSegments.join("/")}${req.nextUrl.search}`;
 
   try {
