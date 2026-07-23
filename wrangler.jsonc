@@ -1,0 +1,19 @@
+{
+  "name": "dashboardvinwonders",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "dashboardvinwonders"
+    }
+  ]
+}
